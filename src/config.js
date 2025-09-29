@@ -16,7 +16,7 @@ function getConfig() {
   const ackMessage = 
     process.env.ACK_MESSAGE ||
     "¡Gracias por contactarnos! 😊 Te responderemos en breve.";
-  const ackWindowDays = parseInt(process.env.ACK_WINDOW_DAYS) || 7;
+  const ackWindowDays = process.env.ACK_WINDOW_DAYS !== undefined ? parseInt(process.env.ACK_WINDOW_DAYS) : 7;
   return {
     port,
     verifyToken,

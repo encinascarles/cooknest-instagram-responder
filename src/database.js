@@ -15,7 +15,11 @@ class UserDatabase {
         first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_sent DATETIME DEFAULT CURRENT_TIMESTAMP,
         message_count INTEGER DEFAULT 1,
-        first_reel_sent DATETIME
+        first_reel_sent DATETIME,
+        username TEXT,
+        full_name TEXT,
+        profile_pic TEXT,
+        last_profile_update DATETIME
       )
     `;
     
@@ -35,6 +39,16 @@ class UserDatabase {
           if (alterErr && !alterErr.message.includes('duplicate column name')) {
             console.error('Error adding first_reel_sent column:', alterErr);
           }
+        });
+        // Add profile columns
+        const profileColumns = ['username TEXT', 'full_name TEXT', 'profile_pic TEXT', 'last_profile_update DATETIME'];
+        profileColumns.forEach(column => {
+          this.db.run(`ALTER TABLE users ADD COLUMN ${column}`, (alterErr) => {
+            // Ignore error if column already exists
+            if (alterErr && !alterErr.message.includes('duplicate column name')) {
+              console.error(`Error adding ${column} column:`, alterErr);
+            }
+          });
         });
       }
     });
@@ -107,6 +121,46 @@ class UserDatabase {
             reject(err);
           } else {
             resolve(this.changes);
+          }
+        }
+      );
+    });
+  }
+
+  async updateUserProfile(userId, profileData) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `INSERT INTO users (user_id, username, full_name, profile_pic, last_profile_update) 
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) 
+         ON CONFLICT(user_id) DO UPDATE SET 
+           username = ?,
+           full_name = ?,
+           profile_pic = ?,
+           last_profile_update = CURRENT_TIMESTAMP
+         WHERE user_id = ?`,
+        [userId, profileData.username, profileData.full_name, profileData.profile_pic,
+         profileData.username, profileData.full_name, profileData.profile_pic, userId],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);
+          }
+        }
+      );
+    });
+  }
+
+  async getUserProfile(userId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT user_id, username, full_name, profile_pic, last_profile_update FROM users WHERE user_id = ?',
+        [userId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
           }
         }
       );

@@ -7,6 +7,8 @@ const { isInstagramMediaMessage } = require("./detect");
 const { sendTextMessage } = require("./sender");
 const { userDb } = require("./database");
 const { logger } = require("./logger");
+const { instagramAPI } = require("./instagram-api");
+const { telegramNotifier } = require("./telegram");
 
 const app = express();
 
@@ -134,18 +136,44 @@ app.post("/webhook", async (req, res) => {
             logger.error("Failed to send auto-reply", sendError?.response?.data || sendError?.message);
           }
         } else {
-          // Handle non-reel messages with acknowledgment
+          // Handle non-reel messages with acknowledgment and notifications
           const { enableAckMessage, ackMessage, ackWindowDays } = getConfig();
+          const shouldNotify = process.env.NOTIFY_NON_REEL_MESSAGES === "true";
+          
+          // Check ACK eligibility FIRST (before any DB updates)
+          let shouldSendAck = false;
           if (enableAckMessage) {
             try {
-              const shouldSendAck = await userDb.shouldSendAck(senderId, ackWindowDays);
-              if (shouldSendAck) {
-                await sendTextMessage(senderId, ackMessage);
-                await userDb.recordMessageSent(senderId);
-              }
+              shouldSendAck = await userDb.shouldSendAck(senderId, ackWindowDays);
+              logger.log(`ACK Debug - User: ${senderId}, shouldSendAck: ${shouldSendAck}, windowDays: ${ackWindowDays}`);
+            } catch (ackError) {
+              logger.error("Failed to check ACK eligibility", ackError);
+            }
+          }
+          
+          // Send Telegram notification for non-reel messages
+          if (shouldNotify) {
+            try {
+              const userProfile = await instagramAPI.getOrUpdateUserProfile(senderId, userDb);
+              await telegramNotifier.notifyImportantMessage(userProfile, messageText || "[attachment]");
+            } catch (notifyError) {
+              logger.error("Failed to send Telegram notification", notifyError);
+            }
+          }
+          
+          // Send ACK if eligible
+          if (shouldSendAck) {
+            try {
+              await sendTextMessage(senderId, ackMessage);
+              await userDb.recordMessageSent(senderId);
+              logger.log(`ACK sent to ${senderId}`);
             } catch (ackError) {
               logger.error("Failed to send acknowledgment", ackError?.response?.data || ackError?.message);
             }
+          } else if (enableAckMessage) {
+            logger.log(`ACK not sent - recent message exists for ${senderId}`);
+          } else {
+            logger.log("ACK disabled in config");
           }
         }
       }
