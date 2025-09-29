@@ -11,7 +11,7 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy source code
-COPY src/ ./src/
+COPY . .
 
 # Create logs and data directories
 RUN mkdir -p logs data
