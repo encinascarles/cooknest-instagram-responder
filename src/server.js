@@ -6,6 +6,7 @@ const { getConfig } = require("./config");
 const { isInstagramMediaMessage } = require("./detect");
 const { sendTextMessage } = require("./sender");
 const { userDb } = require("./database");
+const { logger } = require("./logger");
 
 const app = express();
 
@@ -35,6 +36,8 @@ app.get("/webhook", (req, res) => {
   if (mode === "subscribe" && token === verifyToken) {
     return res.status(200).send(challenge);
   }
+
+  logger.unauthorizedWebhook();
   return res.sendStatus(403);
 });
 
@@ -49,9 +52,10 @@ app.post("/webhook", async (req, res) => {
   const logOnly =
     process.env.LOG_ONLY_WEBHOOKS === "1" ||
     process.env.LOG_ONLY_WEBHOOKS === "true";
-  // eslint-disable-next-line no-console
-  console.log("Incoming webhook payload:", JSON.stringify(payload, null, 2));
+  
   if (logOnly) {
+    // eslint-disable-next-line no-console
+    console.log("Incoming webhook payload:", JSON.stringify(payload, null, 2));
     return;
   }
 
@@ -79,10 +83,35 @@ app.post("/webhook", async (req, res) => {
           continue;
         }
 
+        // Check if this is our own message (we are the sender)
+        const { botId } = getConfig();
+        if (senderId === botId) {
+          // This is a message we sent - determine if automatic or manual
+          const messageText = message.text || "";
+          const { firstTimeMessage, returningUserMessage, ackMessage } = getConfig();
+          
+          if (messageText === firstTimeMessage || messageText === returningUserMessage || messageText === ackMessage) {
+            logger.automaticMessage(recipientId, messageText);
+          } else {
+            logger.manualMessage(recipientId, messageText);
+          }
+          
+          // Update last_sent for the recipient
+          try {
+            await userDb.recordMessageSent(recipientId);
+          } catch (dbError) {
+            logger.error("Failed to record our own message", dbError);
+          }
+          continue; // Skip processing our own messages
+        }
+
         const messageText = message.text || "";
         const attachments = Array.isArray(message.attachments)
           ? message.attachments
           : [];
+
+        // Log user message
+        logger.userMessage(senderId, messageText || "[attachment]");
 
         const containsInstagramMedia = isInstagramMediaMessage({
           text: messageText,
@@ -92,37 +121,41 @@ app.post("/webhook", async (req, res) => {
         if (containsInstagramMedia) {
           const { firstTimeMessage, returningUserMessage } = getConfig();
           try {
-            // Check if user is new
-            const isNew = await userDb.isNewUser(senderId);
-            const messageToSend = isNew ? firstTimeMessage : returningUserMessage;
-            
-            // Record the user interaction
-            await userDb.recordUser(senderId);
+            // Check if this is their first time sending a reel (not just first message ever)
+            const isFirstTimeReel = await userDb.isFirstTimeReelUser(senderId);
+            const messageToSend = isFirstTimeReel ? firstTimeMessage : returningUserMessage;
             
             // Send appropriate message
             await sendTextMessage(senderId, messageToSend);
+            
+            // Record that we sent a reel-specific message
+            await userDb.recordReelMessageSent(senderId);
           } catch (sendError) {
-            // Silent fail; do not spam logs unless needed
-            // eslint-disable-next-line no-console
-            console.error(
-              "Failed to send auto-reply",
-              sendError?.response?.data || sendError?.message
-            );
+            logger.error("Failed to send auto-reply", sendError?.response?.data || sendError?.message);
+          }
+        } else {
+          // Handle non-reel messages with acknowledgment
+          const { enableAckMessage, ackMessage, ackWindowDays } = getConfig();
+          if (enableAckMessage) {
+            try {
+              const shouldSendAck = await userDb.shouldSendAck(senderId, ackWindowDays);
+              if (shouldSendAck) {
+                await sendTextMessage(senderId, ackMessage);
+                await userDb.recordMessageSent(senderId);
+              }
+            } catch (ackError) {
+              logger.error("Failed to send acknowledgment", ackError?.response?.data || ackError?.message);
+            }
           }
         }
       }
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      "Error processing webhook:",
-      error?.response?.data || error?.message
-    );
+    logger.error("Error processing webhook", error?.response?.data || error?.message);
   }
 });
 
 const { port } = getConfig();
 app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`CookNest IG Responder listening on port ${port}`);
+  logger.log(`CookNest IG Responder listening on port ${port}`);
 });
