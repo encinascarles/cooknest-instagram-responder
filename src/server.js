@@ -5,6 +5,7 @@ require("dotenv").config();
 const { getConfig } = require("./config");
 const { isInstagramMediaMessage } = require("./detect");
 const { sendTextMessage } = require("./sender");
+const { userDb } = require("./database");
 
 const app = express();
 
@@ -89,9 +90,17 @@ app.post("/webhook", async (req, res) => {
         });
 
         if (containsInstagramMedia) {
-          const { autoReplyText } = getConfig();
+          const { firstTimeMessage, returningUserMessage } = getConfig();
           try {
-            await sendTextMessage(senderId, autoReplyText);
+            // Check if user is new
+            const isNew = await userDb.isNewUser(senderId);
+            const messageToSend = isNew ? firstTimeMessage : returningUserMessage;
+            
+            // Record the user interaction
+            await userDb.recordUser(senderId);
+            
+            // Send appropriate message
+            await sendTextMessage(senderId, messageToSend);
           } catch (sendError) {
             // Silent fail; do not spam logs unless needed
             // eslint-disable-next-line no-console

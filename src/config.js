@@ -3,9 +3,13 @@ function getConfig() {
   const verifyToken = process.env.VERIFY_TOKEN || "";
   const pageAccessToken = process.env.PAGE_ACCESS_TOKEN_1 + process.env.PAGE_ACCESS_TOKEN_2 || "";
   const graphApiVersion = process.env.GRAPH_API_VERSION || "v20.0";
-  const autoReplyText =
-    process.env.IG_REPLY_MESSAGE ||
-    "Hola! Para importar recetas a CookNest, usa Compartir → CookNest en Instagram. Enviar el Reel por DM no importa la receta en la app. ¡Gracias!";
+  const firstTimeMessage =
+    process.env.IG_FIRST_TIME_MESSAGE ||
+    "¡Hola! 👋 Veo que es la primera vez que nos envías un reel. Para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest. Si no te aparece, te ayudo a configurarlo 😊";
+  
+  const returningUserMessage =
+    process.env.IG_RETURNING_MESSAGE ||
+    "¡Gracias por enviarnos otro reel! 🙌 Recuerda: para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest.";
 
   console.log("Page Access Token length:", pageAccessToken.length);
   return {
@@ -13,7 +17,8 @@ function getConfig() {
     verifyToken,
     pageAccessToken,
     graphApiVersion,
-    autoReplyText,
+    firstTimeMessage,
+    returningUserMessage,
   };
 }
 
