@@ -1,0 +1,29 @@
+services:
+  cooknest-instagram-bot:
+    build: .
+    container_name: cooknest-instagram-responder
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    volumes:
+      # Persist database and logs
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # Mount users.db to data directory
+      - ./users.db:/app/users.db
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - cooknest-network
+
+networks:
+  cooknest-network:
+    driver: bridge

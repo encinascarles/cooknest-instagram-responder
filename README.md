@@ -1,54 +1,135 @@
-## CookNest Instagram Responder
+# CookNest Instagram Responder
 
-Servicio mínimo en Node.js que detecta Reels/posts enviados por DM a la cuenta de Instagram y responde automáticamente con un mensaje predefinido.
+Servicio automatizado que detecta reels/posts enviados por DM a Instagram y responde automáticamente con mensajes personalizados. Incluye notificaciones por Telegram para mensajes importantes.
 
-### Requisitos
+## 🚀 Despliegue Rápido
 
-- Node.js 18+
-- Cuenta de Facebook/Meta con página conectada a Instagram y permisos de Mensajería de Instagram
-
-### Configuración
-
-1. Copia `.env.example` a `.env` y completa:
-
+```bash
+git clone <repo-url>
+cd cooknest-instagram-responder
+cp .env.example .env
+# Configurar .env (ver abajo)
+docker-compose up -d
 ```
+
+## ⚙️ Configuración
+
+### 1. Configuración de Meta/Facebook
+
+#### Crear App de Facebook
+1. Ve a [Facebook Developers](https://developers.facebook.com/)
+2. Crear nueva app → Tipo: "Business"
+3. Añadir producto: **Instagram** e **Messenger**
+
+#### Obtener Tokens
+1. **Page Access Token**:
+   - En Messenger
+
+2. **Verify Token**:
+   - Genera una cadena aleatoria (ej: `uuid`)
+   - Úsala como token de verificación en Instagram
+
+3. **Instagram Account ID**:
+   - Activa LOG_ONLY_WEBHOOKS
+   - Manda un mensaje a tu cuenta
+   - Copia el recipient id
+
+### 2. Configurar Webhook
+
+1. En tu app de Facebook → Instagram
+2. **Callback URL**: `https://tu-dominio.com/webhook`
+3. **Verify Token**: El mismo que pusiste en `.env`
+4. **Eventos**: Suscribirse a `messages`
+
+### 3. Configurar Telegram (Opcional)
+
+#### Crear Bot
+1. Habla con [@BotFather](https://t.me/BotFather) en Telegram
+2. `/newbot` → Sigue instrucciones
+3. Copia el **Bot Token**
+
+#### Obtener Chat ID
+1. Usar https://t.me/get_id_bot
+
+### 4. Archivo .env
+
+Copia `.env.example` a `.env` y completa:
+
+```env
+# Servidor
 PORT=3000
-VERIFY_TOKEN=<token-de-verificacion-para-webhook>
-PAGE_ACCESS_TOKEN=<page-access-token-de-Meta>
-GRAPH_API_VERSION=v21.0
-IG_REPLY_MESSAGE="Tu mensaje personalizado"
+
+# Meta/Facebook
+VERIFY_TOKEN=tu-token-verificacion-aleatorio
+PAGE_ACCESS_TOKEN_1=primera-mitad-del-token
+PAGE_ACCESS_TOKEN_2=segunda-mitad-del-token
+GRAPH_API_VERSION=v20.0
+INSTAGRAM_ACCOUNT_ID=tu-instagram-account-id
+
+# Mensajes
+IG_FIRST_TIME_MESSAGE=¡Hola! 👋 Primera vez que nos envías un reel...
+IG_RETURNING_MESSAGE=¡Gracias por otro reel! 🙌 Recuerda usar Compartir...
+ENABLE_ACK_MESSAGE=true
+ACK_MESSAGE=¡Gracias por contactarnos! 😊 Te responderemos pronto.
+ACK_WINDOW_DAYS=7
+
+# Telegram (Opcional)
+TELEGRAM_BOT_TOKEN=tu-bot-token
+TELEGRAM_CHAT_ID=tu-chat-id
+NOTIFY_NON_REEL_MESSAGES=true
+
+# Debug
+LOG_ONLY_WEBHOOKS=0
 ```
 
-2. Instala dependencias:
+## 🐳 Docker Compose
 
+```yaml
+version: '3.8'
+
+services:
+  cooknest-instagram-bot:
+    build: .
+    container_name: cooknest-instagram-responder
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./users.db:/app/users.db
 ```
-npm install
-```
 
-3. Arranca el servidor:
+## 🌐 Proxy
 
-```
-npm run dev
-```
+Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare tunnel) que:
+- Maneje SSL/HTTPS (requerido por Meta)
+- Redirija el tráfico al puerto 3000
+- Configure el dominio público para el webhook
 
-4. Expone el puerto públicamente (ngrok, cloudflared) y configura el Webhook en el panel de Meta para el producto Instagram con:
+## 🔧 Funcionalidades
 
-- Verify Token: el mismo `VERIFY_TOKEN`
-- Callback URL: `https://<tu-domino>/webhook`
-- Suscripciones: mensajes (IG) / messaging
+### Detección Automática
+- **Reels/Posts**: Detecta URLs de Instagram y adjuntos tipo `ig_reel`, `share`
+- **Mensajes de texto**: Respuesta de confirmación configurable
+- **Primera vez vs. recurrente**: Mensajes diferentes para nuevos usuarios
 
-### Comportamiento
+### Notificaciones Telegram
+- **Solo mensajes importantes**: No spam por reels automáticos
+- **Info de usuario**: Nombre completo con enlace a perfil
+- **Formato**: `**Nombre Usuario**: mensaje...`
 
-- El endpoint `GET /webhook` valida el token de verificación.
-- El endpoint `POST /webhook` procesa eventos. Si detecta un Reel/post (enlace `instagram.com/reel/...` o `instagram.com/p/...` o adjunto nativo), envía una respuesta automática con `IG_REPLY_MESSAGE`.
-- Para otros mensajes, no responde.
+### Base de Datos
+- **SQLite local**: Tracking de usuarios y mensajes
+- **Persistente**: Datos sobreviven reinicios del contenedor
+- **Ventana configurable**: Control de frecuencia de mensajes
 
-### Detección de Reel/post
+## 🔒 Seguridad
 
-- Texto: regex de URLs `instagram.com/reel/...` o `instagram.com/p/...`.
-- Adjuntos: tipos `reel`, `story`, `share`, `template` con payload que contenga link de Instagram.
-
-### Notas
-
-- Este bot no maneja flujos de atención; sólo auto-responde en el caso específico.
-- Asegúrate de que la app tiene permisos y que el Instagram está vinculado a la página de Facebook correspondiente.
+- **Tokens**: Usar variables de entorno, nunca hardcodear
+- **HTTPS**: Obligatorio para webhooks de Meta
+- **Firewall**: Solo puertos necesarios abiertos
