@@ -84,24 +84,38 @@ LOG_ONLY_WEBHOOKS=0
 
 ## 🐳 Docker Compose
 
+Usando imagen publicada y volúmenes persistentes mínimos (DB y logs):
+
 ```yaml
 version: '3.8'
 
 services:
   cooknest-instagram-bot:
-    build: .
+    image: ghcr.io/encinascarles/cooknest-instagram-responder:latest
     container_name: cooknest-instagram-responder
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-    env_file:
-      - .env
+      - PORT=${PORT:-3000}
+      - VERIFY_TOKEN=${VERIFY_TOKEN}
+      - PAGE_ACCESS_TOKEN_1=${PAGE_ACCESS_TOKEN_1}
+      - PAGE_ACCESS_TOKEN_2=${PAGE_ACCESS_TOKEN_2}
+      - GRAPH_API_VERSION=${GRAPH_API_VERSION:-v20.0}
+      - INSTAGRAM_ACCOUNT_ID=${INSTAGRAM_ACCOUNT_ID}
+      - IG_FIRST_TIME_MESSAGE=${IG_FIRST_TIME_MESSAGE}
+      - IG_RETURNING_MESSAGE=${IG_RETURNING_MESSAGE}
+      - ENABLE_ACK_MESSAGE=${ENABLE_ACK_MESSAGE:-true}
+      - ACK_MESSAGE=${ACK_MESSAGE}
+      - ACK_WINDOW_DAYS=${ACK_WINDOW_DAYS:-7}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - NOTIFY_NON_REEL_MESSAGES=${NOTIFY_NON_REEL_MESSAGES:-true}
+      - LOG_ONLY_WEBHOOKS=${LOG_ONLY_WEBHOOKS:-0}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./users.db:/app/users.db
+      - /home/user/containerdata/cooknestigbot/users.db:/app/users.db
+      - /home/user/containerdata/cooknestigbot/logs:/app/logs
 ```
 
 ## 🌐 Proxy
