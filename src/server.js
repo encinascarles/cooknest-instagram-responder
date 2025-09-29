@@ -72,8 +72,9 @@ app.post("/webhook", async (req, res) => {
 
       for (const event of messagingEvents) {
         const senderId = event?.sender?.id;
+        const recipientId = event?.recipient?.id;
         const message = event?.message;
-        if (!senderId || !message) {
+        if (!senderId || !message || !recipientId) {
           continue;
         }
 
