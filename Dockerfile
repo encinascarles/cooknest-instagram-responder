@@ -7,7 +7,7 @@ RUN apk add --no-cache curl
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 
 # Install dependencies
@@ -31,6 +31,9 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
+
+# Debug: List files before starting
+RUN ls -la /app && ls -la /app/src/
 
 # Start the application
 CMD ["node", "src/server.js"]
