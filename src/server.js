@@ -9,6 +9,7 @@ const { logger } = require("./logger");
 const { instagramAPI } = require("./instagram-api");
 const { telegramNotifier } = require("./telegram");
 const { instagramAuthRouter } = require("./instagram-auth");
+const { startTokenRefreshScheduler } = require("./token-refresh");
 
 const app = express();
 
@@ -192,4 +193,7 @@ app.post("/webhook", async (req, res) => {
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(port, () => {
   logger.log(`CookNest IG Responder listening on port ${port}`);
+  
+  // Start token refresh scheduler
+  startTokenRefreshScheduler();
 });

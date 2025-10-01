@@ -16,14 +16,15 @@ docker-compose up -d
 
 ### 1. Configuración de Meta/Facebook
 
-#### Crear App de Facebook
+#### Crear App de Facebook/Instagram
 1. Ve a [Facebook Developers](https://developers.facebook.com/)
 2. Crear nueva app → Tipo: "Business"
-3. Añadir producto: **Instagram** e **Messenger**
+3. Añadir producto: **Instagram**
 
-#### Obtener Tokens
-1. **Page Access Token**:
-   - En Messenger
+#### Obtener Credenciales
+1. **App ID y App Secret**:
+   - En Settings → Basic de tu app
+   - Copia `App ID` e `App Secret`
 
 2. **Verify Token**:
    - Genera una cadena aleatoria (ej: `uuid`)
@@ -33,6 +34,10 @@ docker-compose up -d
    - Activa LOG_ONLY_WEBHOOKS
    - Manda un mensaje a tu cuenta
    - Copia el recipient id
+
+4. **OAuth Redirect URI**:
+   - En Settings → Basic → Add Platform → Website
+   - Añade: `https://tu-dominio.com/auth/instagram/callback`
 
 ### 2. Configurar Webhook
 
@@ -61,10 +66,13 @@ PORT=3000
 
 # Meta/Facebook
 VERIFY_TOKEN=tu-token-verificacion-aleatorio
-PAGE_ACCESS_TOKEN_1=primera-mitad-del-token
-PAGE_ACCESS_TOKEN_2=segunda-mitad-del-token
-GRAPH_API_VERSION=v20.0
 INSTAGRAM_ACCOUNT_ID=tu-instagram-account-id
+
+# Instagram OAuth (Business Login)
+IG_APP_ID=tu-instagram-app-id
+IG_APP_SECRET=tu-instagram-app-secret
+IG_REDIRECT_URI=https://tu-dominio.com/auth/instagram/callback
+IG_LOGIN_SCOPES=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights
 
 # Mensajes
 IG_FIRST_TIME_MESSAGE=¡Hola! 👋 Primera vez que nos envías un reel...
@@ -81,6 +89,24 @@ NOTIFY_NON_REEL_MESSAGES=true
 # Debug
 LOG_ONLY_WEBHOOKS=0
 ```
+
+## 🔐 Autenticación OAuth
+
+Después de configurar el `.env`, necesitas autorizar la app con tu cuenta de Instagram:
+
+1. **Inicia el servidor**: `docker-compose up -d` o `npm start`
+2. **Abre en el navegador**: `https://tu-dominio.com/auth/instagram/start`
+3. **Autoriza la app**: Inicia sesión con tu Instagram Business
+4. **Copia el token**: Se mostrará en pantalla y guardará automáticamente en la DB
+
+### Renovación Automática de Tokens
+
+El bot renovará automáticamente el token cada 24 horas si:
+- El token tiene al menos 24 horas de antigüedad
+- El token expira en menos de 60 días
+- El token aún es válido
+
+Los tokens de Instagram expiran cada ~60 días, pero se renuevan automáticamente sin intervención.
 
 ## 🐳 Docker Compose
 
@@ -100,10 +126,11 @@ services:
       - NODE_ENV=production
       - PORT=${PORT:-3000}
       - VERIFY_TOKEN=${VERIFY_TOKEN}
-      - PAGE_ACCESS_TOKEN_1=${PAGE_ACCESS_TOKEN_1}
-      - PAGE_ACCESS_TOKEN_2=${PAGE_ACCESS_TOKEN_2}
-      - GRAPH_API_VERSION=${GRAPH_API_VERSION:-v20.0}
       - INSTAGRAM_ACCOUNT_ID=${INSTAGRAM_ACCOUNT_ID}
+      - IG_APP_ID=${IG_APP_ID}
+      - IG_APP_SECRET=${IG_APP_SECRET}
+      - IG_REDIRECT_URI=${IG_REDIRECT_URI}
+      - IG_LOGIN_SCOPES=${IG_LOGIN_SCOPES}
       - IG_FIRST_TIME_MESSAGE=${IG_FIRST_TIME_MESSAGE}
       - IG_RETURNING_MESSAGE=${IG_RETURNING_MESSAGE}
       - ENABLE_ACK_MESSAGE=${ENABLE_ACK_MESSAGE:-true}
@@ -138,9 +165,11 @@ Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare 
 - **Formato**: `**Nombre Usuario**: mensaje...`
 
 ### Base de Datos
-- **SQLite local**: Tracking de usuarios y mensajes
+- **SQLite local**: Tracking de usuarios, mensajes y token de Instagram
+- **Single-account design**: Solo un token de Instagram almacenado
 - **Persistente**: Datos sobreviven reinicios del contenedor
 - **Ventana configurable**: Control de frecuencia de mensajes
+- **Token refresh**: Renovación automática cada 24h cuando está próximo a expirar
 
 ## 🔒 Seguridad
 

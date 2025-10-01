@@ -3,22 +3,17 @@ const { logger } = require("./logger");
 const { userDb } = require("./database");
 
 async function getAccessToken() {
-  const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
-  if (!instagramAccountId) {
-    throw new Error("INSTAGRAM_ACCOUNT_ID is not configured");
-  }
-
-  const record = await userDb.getInstagramAccount(instagramAccountId);
-  if (!record || !record.access_token) {
+  const tokenRecord = await userDb.getInstagramToken();
+  if (!tokenRecord || !tokenRecord.access_token) {
     throw new Error("No stored Instagram access token. Complete OAuth first.");
   }
 
-  return { igUserId: instagramAccountId, accessToken: record.access_token };
+  return tokenRecord.access_token;
 }
 
 class InstagramAPI {
   async getUserProfile(userId) {
-    const { accessToken } = await getAccessToken();
+    const accessToken = await getAccessToken();
 
     try {
       const url = `https://graph.facebook.com/v20.0/${userId}`;

@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { userDb } = require("./database");
+const { logger } = require("./logger");
 
 async function getInstagramToken() {
   const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
@@ -9,12 +10,12 @@ async function getInstagramToken() {
     );
   }
 
-  const record = await userDb.getInstagramAccount(instagramAccountId);
-  if (!record || !record.access_token) {
+  const tokenRecord = await userDb.getInstagramToken();
+  if (!tokenRecord || !tokenRecord.access_token) {
     throw new Error("No stored Instagram access token. Complete OAuth first.");
   }
 
-  return { igUserId: instagramAccountId, accessToken: record.access_token };
+  return { igUserId: instagramAccountId, accessToken: tokenRecord.access_token };
 }
 
 async function sendTextMessage(psid, text) {

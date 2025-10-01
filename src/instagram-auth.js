@@ -122,29 +122,18 @@ router.get("/auth/instagram/callback", async (req, res) => {
     const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
 
     const storedInfo = {
-      shortcut_associated_ig_user_id: instagramAccountId || null,
-      authorization_user_id: String(user_id),
+      configured_ig_account_id: instagramAccountId || null,
+      authorized_ig_user_id: String(user_id),
     };
 
     try {
-      if (instagramAccountId) {
-        await userDb.upsertInstagramAccount({
-          igUserId: instagramAccountId,
-          accessToken: longLivedToken,
-          expiresAt,
-        });
-        storedInfo.persisted_under_id = instagramAccountId;
-      } else {
-        await userDb.upsertInstagramAccount({
-          igUserId: String(user_id),
-          accessToken: longLivedToken,
-          expiresAt,
-        });
-        storedInfo.persisted_under_id = String(user_id);
-      }
-      logger.log(`Stored long-lived token (IG OAuth user ${user_id})`);
+      await userDb.saveInstagramToken(longLivedToken, expiresAt);
+      storedInfo.token_saved = true;
+      logger.log(`Stored long-lived token (authorized by IG user ${user_id})`);
     } catch (storeError) {
       logger.error("Failed to store Instagram token", storeError);
+      storedInfo.token_saved = false;
+      storedInfo.error = storeError.message;
     }
 
     res.set("Content-Type", "text/html; charset=utf-8");
