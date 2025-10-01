@@ -53,16 +53,108 @@ class TelegramNotifier {
     await this.sendMessage(message);
   }
 
-  async notifyError(errorMessage) {
+  async notifyError(errorType, errorMessage, additionalInfo = '') {
     if (!this.isConfigured()) return;
 
-    const message = `❌ <b>Bot Error</b>
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    
+    let emoji = '❌';
+    let title = 'Bot Error';
+    
+    // Customize based on error type
+    switch (errorType) {
+      case 'token_expired':
+        emoji = '🔐';
+        title = 'Token Expired';
+        break;
+      case 'token_refresh_failed':
+        emoji = '🔄';
+        title = 'Token Refresh Failed';
+        break;
+      case 'send_message_failed':
+        emoji = '💬';
+        title = 'Failed to Send Message';
+        break;
+      case 'api_error':
+        emoji = '🌐';
+        title = 'API Error';
+        break;
+      case 'database_error':
+        emoji = '💾';
+        title = 'Database Error';
+        break;
+    }
 
-⚠️ ${errorMessage}
-
-🔧 Check logs for details`;
+    let message = `${emoji} <b>${title}</b>\n\n`;
+    message += `⚠️ ${errorMessage}\n`;
+    
+    if (additionalInfo) {
+      message += `\nℹ️ ${additionalInfo}\n`;
+    }
+    
+    message += `\n🕐 ${timestamp}`;
 
     await this.sendMessage(message);
+  }
+
+  async notifyTokenExpired() {
+    await this.notifyError(
+      'token_expired',
+      'Instagram access token has expired!',
+      'Please re-authorize the app by visiting /auth/instagram/start'
+    );
+  }
+
+  async notifyTokenRefreshFailed(errorDetail) {
+    await this.notifyError(
+      'token_refresh_failed',
+      'Failed to automatically refresh Instagram token',
+      errorDetail
+    );
+  }
+
+  async notifyMessageSendFailed(userId, errorDetail) {
+    await this.notifyError(
+      'send_message_failed',
+      `Could not send message to user ${userId}`,
+      errorDetail
+    );
+  }
+
+  async notifyBotStarted(hasValidToken) {
+    if (!this.isConfigured()) return;
+
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    
+    if (hasValidToken) {
+      const message = `✅ <b>Bot Started</b>
+
+🤖 CookNest Instagram Responder is now running
+
+✓ Instagram token validated
+✓ Ready to process messages
+
+🕐 ${timestamp}`;
+      
+      await this.sendMessage(message);
+    } else {
+      const oauthUrl = process.env.IG_REDIRECT_URI 
+        ? process.env.IG_REDIRECT_URI.replace('/auth/instagram/callback', '/auth/instagram/start')
+        : 'https://carlotes.ganxo.net/auth/instagram/start';
+      
+      const message = `⚠️ <b>Bot Started - Authorization Needed</b>
+
+🤖 CookNest Instagram Responder is running
+
+❌ No valid Instagram token found
+
+🔐 Please authorize the app:
+<a href="${oauthUrl}">${oauthUrl}</a>
+
+🕐 ${timestamp}`;
+      
+      await this.sendMessage(message);
+    }
   }
 }
 

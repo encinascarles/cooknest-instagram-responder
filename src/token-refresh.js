@@ -1,6 +1,7 @@
 const axios = require("axios");
 const { userDb } = require("./database");
 const { logger } = require("./logger");
+const { telegramNotifier } = require("./telegram");
 
 /**
  * Refresh Instagram long-lived token
@@ -47,7 +48,9 @@ async function refreshInstagramToken() {
     }
 
     if (daysUntilExpiry <= 0) {
-      logger.error("Token has expired! Please re-authorize via OAuth.");
+      const errorMsg = "Token has expired! Please re-authorize via OAuth.";
+      logger.error(errorMsg);
+      await telegramNotifier.notifyTokenExpired();
       return false;
     }
 
@@ -71,7 +74,11 @@ async function refreshInstagramToken() {
     logger.log(`✓ Token refreshed successfully (new expiry: ${newExpiresAt}, type: ${token_type})`);
     return true;
   } catch (error) {
+    const errorDetail = error?.response?.data?.error?.message || error?.message || "Unknown error";
     logger.error("Token refresh failed", error?.response?.data || error?.message);
+    
+    // Notify via Telegram about refresh failure
+    await telegramNotifier.notifyTokenRefreshFailed(errorDetail);
     return false;
   }
 }

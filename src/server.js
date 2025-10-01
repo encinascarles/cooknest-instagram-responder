@@ -139,6 +139,7 @@ app.post("/webhook", async (req, res) => {
             await userDb.recordReelMessageSent(senderId);
           } catch (sendError) {
             logger.error("Failed to send auto-reply", sendError?.response?.data || sendError?.message);
+            // Error notification is already sent by sendTextMessage
           }
         } else {
           // Handle non-reel messages with acknowledgment and notifications
@@ -176,6 +177,7 @@ app.post("/webhook", async (req, res) => {
               logger.log(`ACK sent to ${senderId}`);
             } catch (ackError) {
               logger.error("Failed to send acknowledgment", ackError?.response?.data || ackError?.message);
+              // Error notification is already sent by sendTextMessage
             }
           } else if (enableAckMessage) {
             logger.log(`ACK not sent - recent message exists for ${senderId}`);
@@ -191,8 +193,29 @@ app.post("/webhook", async (req, res) => {
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-app.listen(port, () => {
+app.listen(port, async () => {
   logger.log(`CookNest IG Responder listening on port ${port}`);
+  
+  // Check if we have a valid token
+  let hasValidToken = false;
+  try {
+    const tokenRecord = await userDb.getInstagramToken();
+    if (tokenRecord && tokenRecord.access_token) {
+      // Check if token is expired
+      if (tokenRecord.expires_at) {
+        const expiresAt = new Date(tokenRecord.expires_at);
+        const now = new Date();
+        hasValidToken = expiresAt > now;
+      } else {
+        hasValidToken = true; // No expiry date means we assume it's valid
+      }
+    }
+  } catch (error) {
+    logger.error("Failed to check token status on startup", error);
+  }
+  
+  // Notify bot startup status via Telegram
+  await telegramNotifier.notifyBotStarted(hasValidToken);
   
   // Start token refresh scheduler
   startTokenRefreshScheduler();

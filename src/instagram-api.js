@@ -1,11 +1,25 @@
 const axios = require("axios");
 const { logger } = require("./logger");
 const { userDb } = require("./database");
+const { telegramNotifier } = require("./telegram");
 
 async function getAccessToken() {
   const tokenRecord = await userDb.getInstagramToken();
   if (!tokenRecord || !tokenRecord.access_token) {
-    throw new Error("No stored Instagram access token. Complete OAuth first.");
+    const error = new Error("No stored Instagram access token. Complete OAuth first.");
+    await telegramNotifier.notifyTokenExpired();
+    throw error;
+  }
+
+  // Check if token is expired
+  if (tokenRecord.expires_at) {
+    const expiresAt = new Date(tokenRecord.expires_at);
+    const now = new Date();
+    if (expiresAt <= now) {
+      const error = new Error("Instagram token has expired");
+      await telegramNotifier.notifyTokenExpired();
+      throw error;
+    }
   }
 
   return tokenRecord.access_token;
@@ -33,10 +47,22 @@ class InstagramAPI {
       };
     } catch (error) {
       // Log error but don't throw - we'll use fallback data
+      const errorDetail = error?.response?.data?.error?.message || error?.message;
+      const errorCode = error?.response?.data?.error?.code;
+      
       logger.error(
         `Failed to fetch profile for user ${userId}`,
         error?.response?.data || error?.message,
       );
+
+      // Check if it's a critical token error
+      if (errorCode === 190 || errorDetail?.toLowerCase().includes('token') || errorDetail?.toLowerCase().includes('oauth')) {
+        await telegramNotifier.notifyError(
+          'api_error',
+          `Failed to fetch user profile due to token issue`,
+          errorDetail
+        );
+      }
 
       // Return minimal profile data
       return {

@@ -160,9 +160,14 @@ Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare 
 - **Primera vez vs. recurrente**: Mensajes diferentes para nuevos usuarios
 
 ### Notificaciones Telegram
-- **Solo mensajes importantes**: No spam por reels automáticos
-- **Info de usuario**: Nombre completo con enlace a perfil
-- **Formato**: `**Nombre Usuario**: mensaje...`
+- **Mensajes importantes**: Notifica cuando usuarios envían mensajes (no reels)
+- **Info de usuario**: Nombre completo con enlace a perfil de Instagram
+- **Alertas de errores**: Notificación automática si hay problemas críticos:
+  - 🔐 Token expirado o inválido
+  - 🔄 Fallo en renovación automática de token
+  - 💬 Error al enviar mensajes
+  - 🌐 Errores de API de Instagram
+- **Formato compacto**: `**Nombre Usuario**: mensaje...`
 
 ### Base de Datos
 - **SQLite local**: Tracking de usuarios, mensajes y token de Instagram
@@ -176,3 +181,40 @@ Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare 
 - **Tokens**: Usar variables de entorno, nunca hardcodear
 - **HTTPS**: Obligatorio para webhooks de Meta
 - **Firewall**: Solo puertos necesarios abiertos
+
+## 🚨 Monitoreo y Alertas
+
+El bot está diseñado para ser completamente autónomo. Sin embargo, recibirás notificaciones de Telegram cuando:
+
+### Notificaciones Automáticas
+
+**Al Iniciar el Bot:**
+- ✅ Confirmación de inicio con token válido
+- ⚠️ Alerta si falta autorización (con link directo para OAuth)
+
+**Errores Críticos:**
+- **Token Expirado**: Si el token de Instagram expira sin poder renovarse
+- **Fallo en Renovación**: Si el proceso automático de renovación falla
+- **Error al Enviar**: Si no se puede enviar un mensaje a un usuario
+- **Errores de API**: Problemas con las APIs de Instagram/Facebook
+
+### Formato de Alertas
+Cada alerta incluye:
+- Emoji identificativo del tipo de error
+- Descripción clara del problema
+- Detalles técnicos (si aplica)
+- Timestamp de cuando ocurrió
+- Acción recomendada (si aplica)
+
+**Ejemplo:**
+```
+🔐 Token Expired
+
+⚠️ Instagram access token has expired!
+
+ℹ️ Please re-authorize the app by visiting /auth/instagram/start
+
+🕐 2025-10-01 15:42:13
+```
+
+Con este sistema, solo recibes notificaciones cuando realmente necesitas actuar.
