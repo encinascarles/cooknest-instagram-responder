@@ -2,7 +2,6 @@ const express = require("express");
 const morgan = require("morgan");
 require("dotenv").config();
 
-const { getConfig } = require("./config");
 const { isInstagramMediaMessage } = require("./detect");
 const { sendTextMessage } = require("./sender");
 const { userDb } = require("./database");
@@ -37,9 +36,7 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  const { verifyToken } = getConfig();
-
-  if (mode === "subscribe" && token === verifyToken) {
+  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
 
@@ -90,11 +87,13 @@ app.post("/webhook", async (req, res) => {
         }
 
         // Check if this is our own message (we are the sender)
-        const { botId } = getConfig();
+        const botId = process.env.INSTAGRAM_ACCOUNT_ID || "";
         if (senderId === botId) {
           // This is a message we sent - determine if automatic or manual
           const messageText = message.text || "";
-          const { firstTimeMessage, returningUserMessage, ackMessage } = getConfig();
+          const firstTimeMessage = process.env.IG_FIRST_TIME_MESSAGE || "¡Hola! 👋 Veo que es la primera vez que nos envías un reel. Para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest. Si no te aparece, te ayudo a configurarlo 😊";
+          const returningUserMessage = process.env.IG_RETURNING_MESSAGE || "¡Gracias por enviarnos otro reel! 🙌 Recuerda: para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest.";
+          const ackMessage = process.env.ACK_MESSAGE || "¡Gracias por contactarnos! 😊 Te responderemos en breve.";
           
           if (messageText === firstTimeMessage || messageText === returningUserMessage || messageText === ackMessage) {
             logger.automaticMessage(recipientId, messageText);
@@ -125,7 +124,8 @@ app.post("/webhook", async (req, res) => {
         });
 
         if (containsInstagramMedia) {
-          const { firstTimeMessage, returningUserMessage } = getConfig();
+          const firstTimeMessage = process.env.IG_FIRST_TIME_MESSAGE || "¡Hola! 👋 Veo que es la primera vez que nos envías un reel. Para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest. Si no te aparece, te ayudo a configurarlo 😊";
+          const returningUserMessage = process.env.IG_RETURNING_MESSAGE || "¡Gracias por enviarnos otro reel! 🙌 Recuerda: para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest.";
           try {
             // Check if this is their first time sending a reel (not just first message ever)
             const isFirstTimeReel = await userDb.isFirstTimeReelUser(senderId);
@@ -141,7 +141,9 @@ app.post("/webhook", async (req, res) => {
           }
         } else {
           // Handle non-reel messages with acknowledgment and notifications
-          const { enableAckMessage, ackMessage, ackWindowDays } = getConfig();
+          const enableAckMessage = process.env.ENABLE_ACK_MESSAGE === "true";
+          const ackMessage = process.env.ACK_MESSAGE || "¡Gracias por contactarnos! 😊 Te responderemos en breve.";
+          const ackWindowDays = process.env.ACK_WINDOW_DAYS !== undefined ? parseInt(process.env.ACK_WINDOW_DAYS) : 7;
           const shouldNotify = process.env.NOTIFY_NON_REEL_MESSAGES === "true";
           
           // Check ACK eligibility FIRST (before any DB updates)
@@ -187,7 +189,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-const { port } = getConfig();
+const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(port, () => {
   logger.log(`CookNest IG Responder listening on port ${port}`);
 });

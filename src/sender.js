@@ -1,10 +1,8 @@
 const axios = require("axios");
-
-const { getConfig } = require("./config");
 const { userDb } = require("./database");
 
 async function getInstagramToken() {
-  const { instagramAccountId } = getConfig();
+  const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
   if (!instagramAccountId) {
     throw new Error(
       "INSTAGRAM_ACCOUNT_ID (business IG user ID) is not configured",

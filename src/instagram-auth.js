@@ -1,7 +1,6 @@
 const express = require("express");
 const axios = require("axios");
 
-const { getConfig } = require("./config");
 const { logger } = require("./logger");
 const { userDb } = require("./database");
 
@@ -17,7 +16,9 @@ function escapeHtml(str) {
 const router = express.Router();
 
 function ensureConfig() {
-  const { igAppId, igAppSecret, igRedirectUri } = getConfig();
+  const igAppId = process.env.IG_APP_ID || "";
+  const igAppSecret = process.env.IG_APP_SECRET || "";
+  const igRedirectUri = process.env.IG_REDIRECT_URI || "";
   if (!igAppId || !igAppSecret || !igRedirectUri) {
     throw new Error(
       "Instagram OAuth configuration missing. Check IG_APP_ID, IG_APP_SECRET, IG_REDIRECT_URI",
@@ -28,7 +29,9 @@ function ensureConfig() {
 router.get("/auth/instagram/start", (req, res) => {
   try {
     ensureConfig();
-    const { igAppId, igRedirectUri, igLoginScopes } = getConfig();
+    const igAppId = process.env.IG_APP_ID || "";
+    const igRedirectUri = process.env.IG_REDIRECT_URI || "";
+    const igLoginScopes = process.env.IG_LOGIN_SCOPES || "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
     const state = req.query.state || "";
     const authUrl = new URL(`https://www.instagram.com/oauth/authorize`);
     authUrl.searchParams.set("client_id", igAppId);
@@ -61,7 +64,9 @@ router.get("/auth/instagram/callback", async (req, res) => {
 
   try {
     ensureConfig();
-    const { igAppId, igAppSecret, igRedirectUri } = getConfig();
+    const igAppId = process.env.IG_APP_ID || "";
+    const igAppSecret = process.env.IG_APP_SECRET || "";
+    const igRedirectUri = process.env.IG_REDIRECT_URI || "";
 
     logger.log("Exchanging short-lived Instagram code for token");
     const shortLivedResp = await axios.post(
@@ -114,7 +119,7 @@ router.get("/auth/instagram/callback", async (req, res) => {
       ? new Date(Date.now() + Number(longExpiresIn) * 1000).toISOString()
       : null;
 
-    const { instagramAccountId } = getConfig();
+    const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
 
     const storedInfo = {
       shortcut_associated_ig_user_id: instagramAccountId || null,
@@ -132,8 +137,8 @@ router.get("/auth/instagram/callback", async (req, res) => {
       } else {
         await userDb.upsertInstagramAccount({
           igUserId: String(user_id),
-        accessToken: longLivedToken,
-        expiresAt,
+          accessToken: longLivedToken,
+          expiresAt,
         });
         storedInfo.persisted_under_id = String(user_id);
       }

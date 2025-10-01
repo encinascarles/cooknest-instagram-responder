@@ -1,10 +1,9 @@
 const axios = require("axios");
-const { getConfig } = require("./config");
 const { logger } = require("./logger");
 const { userDb } = require("./database");
 
 async function getAccessToken() {
-  const { instagramAccountId } = getConfig();
+  const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
   if (!instagramAccountId) {
     throw new Error("INSTAGRAM_ACCOUNT_ID is not configured");
   }
