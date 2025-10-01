@@ -30,11 +30,12 @@ class InstagramAPI {
     const accessToken = await getAccessToken();
 
     try {
-      const url = `https://graph.facebook.com/v20.0/${userId}`;
+      // Use Instagram Graph API endpoint with IGSID (Instagram-scoped ID)
+      const url = `https://graph.instagram.com/v20.0/${userId}`;
       const response = await axios.get(url, {
         params: {
           access_token: accessToken,
-          fields: "name,username,profile_pic",
+          fields: "name,username",
         },
         timeout: 10000,
       });
@@ -43,7 +44,7 @@ class InstagramAPI {
         user_id: userId,
         username: response.data.username || null,
         full_name: response.data.name || null,
-        profile_pic: response.data.profile_pic || null,
+        profile_pic: null,
       };
     } catch (error) {
       // Log error but don't throw - we'll use fallback data
