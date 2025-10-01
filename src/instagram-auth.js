@@ -3,6 +3,7 @@ const axios = require("axios");
 
 const { getConfig } = require("./config");
 const { logger } = require("./logger");
+const { userDb } = require("./database");
 
 function escapeHtml(str) {
   return String(str)
@@ -18,7 +19,9 @@ const router = express.Router();
 function ensureConfig() {
   const { igAppId, igAppSecret, igRedirectUri } = getConfig();
   if (!igAppId || !igAppSecret || !igRedirectUri) {
-    throw new Error("Instagram OAuth configuration missing. Check IG_APP_ID, IG_APP_SECRET, IG_REDIRECT_URI");
+    throw new Error(
+      "Instagram OAuth configuration missing. Check IG_APP_ID, IG_APP_SECRET, IG_REDIRECT_URI",
+    );
   }
 }
 
@@ -52,7 +55,9 @@ router.get("/auth/instagram/callback", async (req, res) => {
     return res.status(400).json({ error: "missing_code" });
   }
 
-  logger.log(`Instagram OAuth callback received code ${String(code).slice(0, 6)}***`);
+  logger.log(
+    `Instagram OAuth callback received code ${String(code).slice(0, 6)}***`,
+  );
 
   try {
     ensureConfig();
@@ -72,12 +77,16 @@ router.get("/auth/instagram/callback", async (req, res) => {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-      }
+      },
     );
 
-    const { access_token: shortLivedToken, user_id, expires_in } = shortLivedResp.data;
+    const {
+      access_token: shortLivedToken,
+      user_id,
+      expires_in,
+    } = shortLivedResp.data;
     logger.log(
-      `Received short-lived token for IG user ${user_id} (expires in ${expires_in || "?"}s)`
+      `Received short-lived token for IG user ${user_id} (expires in ${expires_in || "?"}s)`,
     );
 
     // Exchange for long-lived token (valid ~60 days)
@@ -90,7 +99,7 @@ router.get("/auth/instagram/callback", async (req, res) => {
           client_secret: igAppSecret,
           access_token: shortLivedToken,
         },
-      }
+      },
     );
 
     const {
@@ -100,6 +109,38 @@ router.get("/auth/instagram/callback", async (req, res) => {
     } = longLivedResp.data;
 
     logger.log(`Long-lived token obtained (expires in ${longExpiresIn}s)`);
+
+    const expiresAt = longExpiresIn
+      ? new Date(Date.now() + Number(longExpiresIn) * 1000).toISOString()
+      : null;
+
+    const { instagramAccountId } = getConfig();
+
+    const storedInfo = {
+      shortcut_associated_ig_user_id: instagramAccountId || null,
+      authorization_user_id: String(user_id),
+    };
+
+    try {
+      if (instagramAccountId) {
+        await userDb.upsertInstagramAccount({
+          igUserId: instagramAccountId,
+          accessToken: longLivedToken,
+          expiresAt,
+        });
+        storedInfo.persisted_under_id = instagramAccountId;
+      } else {
+        await userDb.upsertInstagramAccount({
+          igUserId: String(user_id),
+        accessToken: longLivedToken,
+        expiresAt,
+        });
+        storedInfo.persisted_under_id = String(user_id);
+      }
+      logger.log(`Stored long-lived token (IG OAuth user ${user_id})`);
+    } catch (storeError) {
+      logger.error("Failed to store Instagram token", storeError);
+    }
 
     res.set("Content-Type", "text/html; charset=utf-8");
     return res.send(`
@@ -127,10 +168,11 @@ router.get("/auth/instagram/callback", async (req, res) => {
                 long_lived_token: longLivedToken,
                 long_lived_expires_in: longExpiresIn,
                 token_type: longTokenType || "bearer",
+                stored_info: storedInfo,
               },
               null,
-              2
-            )
+              2,
+            ),
           )}</pre>
           <p>Long-lived tokens typically expire in ~60 days. Implement automatic refresh with the <code>fb_exchange_token</code> flow.</p>
         </body>
@@ -138,10 +180,12 @@ router.get("/auth/instagram/callback", async (req, res) => {
     `);
   } catch (oauthError) {
     logger.error("Failed to exchange IG OAuth code", oauthError);
-    const data = oauthError?.response?.data || oauthError?.message || "oauth_error";
-    return res.status(500).json({ error: "oauth_exchange_failed", details: data });
+    const data =
+      oauthError?.response?.data || oauthError?.message || "oauth_error";
+    return res
+      .status(500)
+      .json({ error: "oauth_exchange_failed", details: data });
   }
 });
 
 module.exports = { instagramAuthRouter: router };
-

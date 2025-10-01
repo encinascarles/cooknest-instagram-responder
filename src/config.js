@@ -4,6 +4,7 @@ function getConfig() {
   const pageAccessToken = process.env.PAGE_ACCESS_TOKEN_1 + process.env.PAGE_ACCESS_TOKEN_2 || "";
   const graphApiVersion = process.env.GRAPH_API_VERSION || "v20.0";
   const botId = process.env.INSTAGRAM_ACCOUNT_ID || "";
+  const instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID || "";
   const igAppId = process.env.IG_APP_ID || "";
   const igAppSecret = process.env.IG_APP_SECRET || "";
   const igRedirectUri = process.env.IG_REDIRECT_URI || "";
@@ -29,6 +30,7 @@ function getConfig() {
     pageAccessToken,
     graphApiVersion,
     botId,
+    instagramAccountId,
     igAppId,
     igAppSecret,
     igRedirectUri,

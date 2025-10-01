@@ -50,6 +50,16 @@ class UserDatabase {
             }
           });
         });
+        this.db.run(`CREATE TABLE IF NOT EXISTS insta_accounts (
+            ig_user_id TEXT PRIMARY KEY,
+            access_token TEXT NOT NULL,
+            expires_at DATETIME,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`, (alterErr) => {
+          if (alterErr) {
+            console.error('Error creating insta_accounts table:', alterErr);
+          }
+        });
       }
     });
   }
@@ -156,6 +166,45 @@ class UserDatabase {
       this.db.get(
         'SELECT user_id, username, full_name, profile_pic, last_profile_update FROM users WHERE user_id = ?',
         [userId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  async upsertInstagramAccount({ igUserId, accessToken, expiresAt }) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `INSERT INTO insta_accounts (ig_user_id, access_token, expires_at, updated_at)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(ig_user_id) DO UPDATE SET
+             access_token = excluded.access_token,
+             expires_at = excluded.expires_at,
+             updated_at = CURRENT_TIMESTAMP`,
+        [igUserId, accessToken, expiresAt || null],
+        function (err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);
+          }
+        }
+      );
+    });
+  }
+
+  async getInstagramAccount(igUserId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT ig_user_id, access_token, expires_at, updated_at
+           FROM insta_accounts
+           WHERE ig_user_id = ?`,
+        [igUserId],
         (err, row) => {
           if (err) {
             reject(err);

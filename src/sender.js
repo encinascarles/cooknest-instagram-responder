@@ -1,22 +1,37 @@
 const axios = require("axios");
+
 const { getConfig } = require("./config");
+const { userDb } = require("./database");
 
-async function sendTextMessage(psid, text) {
-  const { pageAccessToken, graphApiVersion } = getConfig();
-
-
-  if (!pageAccessToken) {
-    throw new Error("PAGE_ACCESS_TOKEN is not set");
+async function getInstagramToken() {
+  const { instagramAccountId } = getConfig();
+  if (!instagramAccountId) {
+    throw new Error(
+      "INSTAGRAM_ACCOUNT_ID (business IG user ID) is not configured",
+    );
   }
 
-  const content = {
-    "recipient": { "id": psid },
-    "message": { "text": text }
-  };
-  
-  const url = `https://graph.facebook.com/${graphApiVersion}/me/messages?access_token=${pageAccessToken}`;
+  const record = await userDb.getInstagramAccount(instagramAccountId);
+  if (!record || !record.access_token) {
+    throw new Error("No stored Instagram access token. Complete OAuth first.");
+  }
 
-  const response = await axios.post(url, content);
+  return { igUserId: instagramAccountId, accessToken: record.access_token };
+}
+
+async function sendTextMessage(psid, text) {
+  const { igUserId, accessToken } = await getInstagramToken();
+
+  const payload = {
+    recipient: { id: psid },
+    message: { text },
+  };
+  console.log("sendTextMessage payload", payload);
+  const url = `https://graph.instagram.com/v20.0/${igUserId}/messages?access_token=${accessToken}`;
+
+  const response = await axios.post(url, payload);
+
+  console.log("sendTextMessage response", response.data);
   return response.data;
 }
 
