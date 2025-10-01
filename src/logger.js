@@ -56,7 +56,30 @@ class Logger {
   error(message, error = null) {
     let logMessage = `ERROR: ${message}`;
     if (error) {
-      logMessage += ` - ${error.message || error}`;
+      const serialized = (() => {
+        if (typeof error === "string") return error;
+        if (error?.response?.data) {
+          try {
+            return JSON.stringify(error.response.data);
+          } catch (_e) {
+            return String(error.response.data);
+          }
+        }
+        if (error?.data) {
+          try {
+            return JSON.stringify(error.data);
+          } catch (_e) {
+            return String(error.data);
+          }
+        }
+        if (error?.message) return error.message;
+        try {
+          return JSON.stringify(error);
+        } catch (_e) {
+          return String(error);
+        }
+      })();
+      logMessage += ` - ${serialized}`;
     }
     this.log(logMessage);
   }

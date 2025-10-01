@@ -4,6 +4,12 @@ function getConfig() {
   const pageAccessToken = process.env.PAGE_ACCESS_TOKEN_1 + process.env.PAGE_ACCESS_TOKEN_2 || "";
   const graphApiVersion = process.env.GRAPH_API_VERSION || "v20.0";
   const botId = process.env.INSTAGRAM_ACCOUNT_ID || "";
+  const igAppId = process.env.IG_APP_ID || "";
+  const igAppSecret = process.env.IG_APP_SECRET || "";
+  const igRedirectUri = process.env.IG_REDIRECT_URI || "";
+  const igLoginScopes =
+    process.env.IG_LOGIN_SCOPES ||
+    "instagram_basic,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_metadata";
   const firstTimeMessage =
     process.env.IG_FIRST_TIME_MESSAGE ||
     "¡Hola! 👋 Veo que es la primera vez que nos envías un reel. Para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest. Si no te aparece, te ayudo a configurarlo 😊";
@@ -23,6 +29,10 @@ function getConfig() {
     pageAccessToken,
     graphApiVersion,
     botId,
+    igAppId,
+    igAppSecret,
+    igRedirectUri,
+    igLoginScopes,
     firstTimeMessage,
     returningUserMessage,
     enableAckMessage,

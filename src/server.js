@@ -9,6 +9,7 @@ const { userDb } = require("./database");
 const { logger } = require("./logger");
 const { instagramAPI } = require("./instagram-api");
 const { telegramNotifier } = require("./telegram");
+const { instagramAuthRouter } = require("./instagram-auth");
 
 const app = express();
 
@@ -26,6 +27,9 @@ app.use(
 app.get("/health", (_req, res) => {
   res.status(200).send("OK");
 });
+
+// OAuth routes
+app.use(instagramAuthRouter);
 
 // Webhook verification (GET)
 app.get("/webhook", (req, res) => {
