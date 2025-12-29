@@ -2,7 +2,7 @@ const express = require("express");
 const morgan = require("morgan");
 require("dotenv").config();
 
-const { isInstagramMediaMessage } = require("./detect");
+const { isInstagramMediaMessage, hasSharedUrls } = require("./detect");
 const { sendTextMessage } = require("./sender");
 const { userDb } = require("./database");
 const { logger } = require("./logger");
@@ -124,7 +124,12 @@ app.post("/webhook", async (req, res) => {
           attachments,
         });
 
-        if (containsInstagramMedia) {
+        const containsSharedUrls = hasSharedUrls({
+          text: messageText,
+          attachments,
+        });
+
+        if (containsInstagramMedia || containsSharedUrls) {
           const firstTimeMessage = process.env.IG_FIRST_TIME_MESSAGE || "¡Hola! 👋 Veo que es la primera vez que nos envías un reel. Para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest. Si no te aparece, te ayudo a configurarlo 😊";
           const returningUserMessage = process.env.IG_RETURNING_MESSAGE || "¡Gracias por enviarnos otro reel! 🙌 Recuerda: para guardarlo en CookNest, abre el reel, toca Compartir ▶️ y elige CookNest.";
           try {
