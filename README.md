@@ -85,6 +85,7 @@ ACK_WINDOW_DAYS=7
 TELEGRAM_BOT_TOKEN=tu-bot-token
 TELEGRAM_CHAT_ID=tu-chat-id
 NOTIFY_NON_REEL_MESSAGES=true
+EXCLUDED_SENTENCES=spam message 1|another spam text|unwanted phrase
 
 # Debug
 LOG_ONLY_WEBHOOKS=0
@@ -139,6 +140,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - NOTIFY_NON_REEL_MESSAGES=${NOTIFY_NON_REEL_MESSAGES:-true}
+      - EXCLUDED_SENTENCES=${EXCLUDED_SENTENCES}
       - LOG_ONLY_WEBHOOKS=${LOG_ONLY_WEBHOOKS:-0}
     volumes:
       - /home/user/containerdata/cooknestigbot/users.db:/app/users.db

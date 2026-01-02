@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { logger } = require('./logger');
+const { isExcludedMessage } = require('./detect');
 
 class TelegramNotifier {
   constructor() {
@@ -34,6 +35,12 @@ class TelegramNotifier {
 
   async notifyImportantMessage(userProfile, messageText) {
     if (!this.isConfigured()) return;
+
+    // Check if message should be excluded (spam filter)
+    if (isExcludedMessage(messageText)) {
+      logger.info('Message excluded by spam filter', { messageText: messageText?.substring(0, 50) });
+      return;
+    }
 
     const fullName = userProfile.full_name || 'Unknown User';
     const username = userProfile.username;

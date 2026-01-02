@@ -1,6 +1,33 @@
 // Regex to match URLs (http, https, and common shortened formats)
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
 
+/**
+ * Parses the EXCLUDED_SENTENCES env var (pipe-separated list)
+ * @returns {string[]} Array of excluded sentences (lowercased for comparison)
+ */
+function getExcludedSentences() {
+  const envValue = process.env.EXCLUDED_SENTENCES || "";
+  if (!envValue.trim()) return [];
+  return envValue
+    .split("|")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Checks if a message should be excluded (spam filter)
+ * @param {string} text - The message text to check
+ * @returns {boolean} True if message should be excluded
+ */
+function isExcludedMessage(text) {
+  if (!text) return false;
+  const excluded = getExcludedSentences();
+  if (excluded.length === 0) return false;
+
+  const lowerText = text.toLowerCase();
+  return excluded.some((sentence) => lowerText.includes(sentence));
+}
+
 function isInstagramMediaMessage({ text, attachments }) {
   // Check if text contains Instagram URLs
   if (text && text.includes("instagram.com/")) {
@@ -57,4 +84,5 @@ module.exports = {
   isInstagramMediaMessage,
   extractUrls,
   hasSharedUrls,
+  isExcludedMessage,
 };
