@@ -19,8 +19,10 @@ class Logger {
   }
 
   truncateMessage(message, maxLength = 60) {
-    if (!message || message.length <= maxLength) return message;
-    return message.substring(0, maxLength) + '...';
+    if (!message) return message;
+    const chars = Array.from(message); // do not cut an emoji in half
+    if (chars.length <= maxLength) return message;
+    return chars.slice(0, maxLength).join('') + '...';
   }
 
   log(message) {
@@ -54,37 +56,49 @@ class Logger {
   }
 
   error(message, error = null) {
-    let logMessage = `ERROR: ${message}`;
-    if (error) {
-      const serialized = (() => {
-        if (typeof error === "string") return error;
-        if (error?.response?.data) {
-          try {
-            return JSON.stringify(error.response.data);
-          } catch (_e) {
-            return String(error.response.data);
-          }
-        }
-        if (error?.data) {
-          try {
-            return JSON.stringify(error.data);
-          } catch (_e) {
-            return String(error.data);
-          }
-        }
-        if (error?.message) return error.message;
-        try {
-          return JSON.stringify(error);
-        } catch (_e) {
-          return String(error);
-        }
-      })();
-      logMessage += ` - ${serialized}`;
-    }
-    this.log(logMessage);
+    const detail = describeError(error);
+    this.log(detail ? `ERROR: ${message} - ${detail}` : `ERROR: ${message}`);
+  }
+}
+
+/**
+ * Turns any thrown value (axios error, AggregateError, plain object, string) into
+ * a readable one-line description, including the HTTP status and response body,
+ * the error code and the cause.
+ */
+function describeError(error) {
+  if (error === null || error === undefined || error === "") return "";
+  if (typeof error === "string") return error;
+  if (typeof error !== "object") return String(error);
+
+  const parts = [];
+  if (error.response) {
+    const { status, data } = error.response;
+    if (status) parts.push(`HTTP ${status}`);
+    if (data !== undefined) parts.push(typeof data === "string" ? data : safeJson(data));
+  }
+  const isError = error instanceof Error;
+  if (isError && error.name && error.name !== "Error") parts.push(error.name);
+  if (error.code) parts.push(String(error.code));
+  if (error.message) parts.push(error.message);
+  if (Array.isArray(error.errors)) {
+    for (const inner of error.errors) parts.push(describeError(inner));
+  }
+  if (error.cause) parts.push(`cause: ${describeError(error.cause)}`);
+  if (parts.length === 0) {
+    parts.push(isError ? error.name || "Error (no message)" : safeJson(error));
+  }
+  return parts.filter(Boolean).join(" | ");
+}
+
+function safeJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (_e) {
+    return String(value);
   }
 }
 
 const logger = new Logger();
 
-module.exports = { logger };
+module.exports = { logger, describeError };

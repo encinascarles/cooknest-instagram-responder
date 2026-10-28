@@ -29,7 +29,7 @@ class TelegramNotifier {
         timeout: 10000
       });
     } catch (error) {
-      logger.error('Failed to send Telegram notification', error?.response?.data || error?.message);
+      logger.error('Failed to send Telegram notification', error);
     }
   }
 
@@ -38,26 +38,11 @@ class TelegramNotifier {
 
     // Check if message should be excluded (spam filter)
     if (isExcludedMessage(messageText)) {
-      logger.info('Message excluded by spam filter', { messageText: messageText?.substring(0, 50) });
+      logger.log(`Message excluded by spam filter: "${logger.truncateMessage(messageText, 50)}"`);
       return;
     }
 
-    const fullName = userProfile.full_name || 'Unknown User';
-    const username = userProfile.username;
-    const truncatedMessage = messageText.length > 100 ? messageText.substring(0, 100) + '...' : messageText;
-
-    let nameWithLink;
-    if (username) {
-      // Create clickable link to Instagram web profile
-      nameWithLink = `<a href="https://instagram.com/${username}"><b>${fullName}</b></a>`;
-    } else {
-      // No username available, just bold name
-      nameWithLink = `<b>${fullName}</b>`;
-    }
-
-    const message = `${nameWithLink}: ${truncatedMessage}`;
-
-    await this.sendMessage(message);
+    await this.sendMessage(`${profileLink(userProfile)}: ${escapeHtml(truncate(messageText, 100))}`);
   }
 
   async notifyError(errorType, errorMessage, additionalInfo = '') {
@@ -165,6 +150,28 @@ class TelegramNotifier {
   }
 }
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Cut by characters, not UTF-16 units: a split emoji makes Telegram reject the
+// whole message ("text must be encoded in UTF-8")
+function truncate(text, maxLength) {
+  const chars = Array.from(text || '');
+  return chars.length > maxLength ? chars.slice(0, maxLength).join('') + '...' : chars.join('');
+}
+
+// "<b>Name</b> (@user)" linked to the Instagram profile when we know the username
+function profileLink(userProfile) {
+  const name = escapeHtml(userProfile?.name || userProfile?.full_name || 'Usuario desconocido');
+  const username = userProfile?.username;
+  if (!username) return `<b>${name}</b>`;
+  return `<a href="https://instagram.com/${encodeURIComponent(username)}"><b>${name}</b> (@${escapeHtml(username)})</a>`;
+}
+
 const telegramNotifier = new TelegramNotifier();
 
-module.exports = { telegramNotifier };
+module.exports = { telegramNotifier, TelegramNotifier, profileLink, truncate, escapeHtml };
