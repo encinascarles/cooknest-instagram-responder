@@ -104,11 +104,11 @@ test("free text pending a human answer (Toñi asking, Joana 'No se llegar'): sil
   assert.equal(h.decisions.at(-1).action.kind, "level1");
 });
 
-test("free text right after a reel, inside the debounce wait (Ausen, friend recommending a cook): silence", async () => {
+test("free text right after a reel, inside the debounce wait (text that comes with the reel): silence", async () => {
   const h = await makeHarness();
   const user = "3140806602756539";
   await h.reel(user);
-  await h.wait(54 * 1000);
+  await h.wait(10 * 1000);
   await h.text(user, "He passat aquesta per si teniu controlada aquesta cuinera. Molt bona!");
   await h.time.runAll();
   assert.equal(h.sent.length, 0);
