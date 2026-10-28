@@ -45,7 +45,7 @@ for (const lang of m.LANGUAGES) {
 p();
 p("## Nivel 3 y siguientes: silencio");
 p();
-p("No se envía nada a la persona. A Telegram, una vez al día como máximo: «<Nombre> (@usuario) te ha enviado N reels esta semana, escríbele tú», con el enlace al perfil.");
+p("No se envía nada a la persona. A Telegram, una vez por semana como máximo: «<Nombre> (@usuario) te ha enviado N reels esta semana, escríbele tú», con el enlace al perfil.");
 
 const ANSWER_TITLES = {
   WORKS: "Respuesta al botón «Ya me sale»",

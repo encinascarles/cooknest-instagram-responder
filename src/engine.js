@@ -14,7 +14,7 @@ const DEFAULT_CONFIG = {
   burstGapMs: 2 * MINUTE, // reels this close together belong to the same burst
   replyCooldownMs: 1 * HOUR, // our last reply is still on their screen
   levelResetMs: 30 * DAY, // after this long without reels, start again at level 2
-  escalationNotifyEveryMs: 1 * DAY,
+  escalationNotifyEveryMs: 7 * DAY,
   creatorFollowerThreshold: 5000,
   publicBaseUrl: "",
 };

@@ -129,7 +129,7 @@ test("human answered the free text: the 14-day human rule takes over", async () 
   assert.equal(h.decisions.at(-1).action.kind, "level1");
 });
 
-test("escalation level 1 -> 2 -> 3 (silence, Telegram once per day)", async () => {
+test("escalation level 1 -> 2 -> 3 (silence, Telegram once per week)", async () => {
   const h = await makeHarness({ profiles: { u: { name: "Nati Ranz Perez", username: "marynaty6" } } });
   await h.reel("u");
   await h.time.runAll();
@@ -145,8 +145,11 @@ test("escalation level 1 -> 2 -> 3 (silence, Telegram once per day)", async () =
   await h.wait(DAY);
   await h.reel("u");
   await h.time.runAll();
+  await h.wait(6 * DAY);
+  await h.reel("u");
+  await h.time.runAll();
 
-  assert.deepEqual(reasons(h, "u"), ["level1", "level2", "level3", "level3", "level3"]);
+  assert.deepEqual(reasons(h, "u"), ["level1", "level2", "level3", "level3", "level3", "level3"]);
   assert.equal(h.sent.length, 3); // video + text, then one line
   assert.match(h.sent[1].message.text, /^¡Hola, Nati!/);
   assert.equal(h.sent[1].message.quickReplies.length, 3);

@@ -183,7 +183,7 @@ Mucha gente comparte un reel de receta con nuestro DM en vez de con la app (Comp
 **Escalado por persona:**
 - Nivel 1 (primera vez, también para usuarios antiguos): vídeo tutorial + mensaje corto con su nombre si parece un nombre real + 3 botones (quick replies): «Ya me sale ✅», «No me sale CookNest», «No tengo la app».
 - Nivel 2 (siguiente reel en menos de 30 días): una línea, rotando variantes.
-- Nivel 3 y más: silencio. Telegram, una vez al día como máximo: «<nombre> (@usuario) te ha enviado N reels esta semana, escríbele tú».
+- Nivel 3 y más: silencio. Telegram, una vez por semana como máximo: «<nombre> (@usuario) te ha enviado N reels esta semana, escríbele tú».
 - Tras 30 días sin reels, el siguiente vuelve al nivel 2.
 
 **Botones:** «Ya me sale» → una línea alegre. «No me sale CookNest» → dónde se esconde el icono + `https://cooknest.app/tutorial`, y aviso a Telegram. «No tengo la app» → qué hace CookNest + `https://cooknest.app`.

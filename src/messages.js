@@ -96,19 +96,19 @@ const ANSWERS = {
   },
   NO_ICON: {
     es: [
-      `A veces CookNest se esconde: en Compartir, desliza la fila de apps hasta «Más» y activa CookNest o márcala como favorita. Aquí lo tienes paso a paso, y si sigue sin salir te escribo yo: ${TUTORIAL_URL}`,
-      `Nos pasa a todos 🐥 Toca Compartir, desliza la fila de apps hasta el final, entra en «Más» y activa CookNest. Paso a paso aquí, y si no te sale te escribo yo: ${TUTORIAL_URL}`,
-      `Es un momento: en Compartir, desliza las apps hasta «Más» y añade CookNest a favoritas para tenerla siempre a mano. Te lo enseño aquí, y si no te sale te escribo yo: ${TUTORIAL_URL}`,
+      `A veces CookNest se esconde: en Compartir, desliza la fila de apps hasta «Más» y activa CookNest o márcala como favorita. Aquí lo tienes paso a paso, y si sigue sin salir, escríbenos por aquí: ${TUTORIAL_URL}`,
+      `Nos pasa a todos 🐥 Toca Compartir, desliza la fila de apps hasta el final, entra en «Más» y activa CookNest. Paso a paso aquí, y si no te sale, escríbenos por aquí: ${TUTORIAL_URL}`,
+      `Es un momento: en Compartir, desliza las apps hasta «Más» y añade CookNest a favoritas para tenerla siempre a mano. Te lo enseño aquí, y si no te sale, escríbenos por aquí: ${TUTORIAL_URL}`,
     ],
     ca: [
-      `De vegades CookNest s'amaga: a Comparteix, llisca la fila d'apps fins a «Més» i activa CookNest o marca-la com a preferida. Aquí ho tens pas a pas, i si encara no et surt t'escric jo: ${TUTORIAL_URL}`,
-      `Ens passa a tots 🐥 Toca Comparteix, llisca la fila d'apps fins al final, entra a «Més» i activa CookNest. Pas a pas aquí, i si no et surt t'escric jo: ${TUTORIAL_URL}`,
-      `És un moment: a Comparteix, llisca les apps fins a «Més» i afegeix CookNest a preferides per tenir-la sempre a mà. T'ho ensenyo aquí, i si no et surt t'escric jo: ${TUTORIAL_URL}`,
+      `De vegades CookNest s'amaga: a Comparteix, llisca la fila d'apps fins a «Més» i activa CookNest o marca-la com a preferida. Aquí ho tens pas a pas, i si encara no et surt, escriu-nos per aquí: ${TUTORIAL_URL}`,
+      `Ens passa a tots 🐥 Toca Comparteix, llisca la fila d'apps fins al final, entra a «Més» i activa CookNest. Pas a pas aquí, i si no et surt, escriu-nos per aquí: ${TUTORIAL_URL}`,
+      `És un moment: a Comparteix, llisca les apps fins a «Més» i afegeix CookNest a preferides per tenir-la sempre a mà. T'ho ensenyo aquí, i si no et surt, escriu-nos per aquí: ${TUTORIAL_URL}`,
     ],
     en: [
-      `Sometimes CookNest hides: in Share, scroll the app row to "More" and turn on CookNest or add it to your favorites. Step by step here, and if it still doesn't show up I'll write to you: ${TUTORIAL_URL}`,
-      `It happens to all of us 🐥 Tap Share, scroll the app row to the end, open "More" and turn on CookNest. Step by step here, and if it doesn't work I'll write to you: ${TUTORIAL_URL}`,
-      `It takes a second: in Share, scroll the apps to "More" and add CookNest to your favorites so it is always at hand. I show you here, and if it doesn't work I'll write to you: ${TUTORIAL_URL}`,
+      `Sometimes CookNest hides: in Share, scroll the app row to "More" and turn on CookNest or add it to your favorites. Step by step here, and if it still doesn't show up, message us here: ${TUTORIAL_URL}`,
+      `It happens to all of us 🐥 Tap Share, scroll the app row to the end, open "More" and turn on CookNest. Step by step here, and if it doesn't work, message us here: ${TUTORIAL_URL}`,
+      `It takes a second: in Share, scroll the apps to "More" and add CookNest to your favorites so it is always at hand. I show you here, and if it doesn't work, message us here: ${TUTORIAL_URL}`,
     ],
   },
   NO_APP: {
