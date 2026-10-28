@@ -1,6 +1,6 @@
 # CookNest Instagram Responder
 
-Servicio automatizado que detecta reels/posts enviados por DM a Instagram y responde automáticamente con mensajes personalizados. Incluye notificaciones por Telegram para mensajes importantes.
+Servicio que detecta las recetas (reels, posts, enlaces) que la gente envía por error al DM de @cooknest.app en vez de compartirlas con la app, y les enseña a hacerlo bien sin interrumpir conversaciones reales. Incluye notificaciones por Telegram para mensajes importantes.
 
 ## 🚀 Despliegue Rápido
 
@@ -74,12 +74,11 @@ IG_APP_SECRET=tu-instagram-app-secret
 IG_REDIRECT_URI=https://tu-dominio.com/auth/instagram/callback
 IG_LOGIN_SCOPES=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights
 
-# Mensajes
-IG_FIRST_TIME_MESSAGE=¡Hola! 👋 Primera vez que nos envías un reel...
-IG_RETURNING_MESSAGE=¡Gracias por otro reel! 🙌 Recuerda usar Compartir...
-ENABLE_ACK_MESSAGE=true
-ACK_MESSAGE=¡Gracias por contactarnos! 😊 Te responderemos pronto.
-ACK_WINDOW_DAYS=7
+# Respuestas automáticas
+REPLY_MODE=shadow                     # shadow (por defecto) o live
+TEST_USER_IDS=123456789,987654321     # en shadow, solo estos IGSID reciben mensajes de verdad
+PUBLIC_BASE_URL=https://carlotes.ganxo.net   # URL pública de este servidor (vídeo tutorial)
+CREATOR_FOLLOWER_THRESHOLD=5000       # a partir de estos seguidores no se responde (creadores/marcas)
 
 # Telegram (Opcional)
 TELEGRAM_BOT_TOKEN=tu-bot-token
@@ -89,7 +88,20 @@ EXCLUDED_SENTENCES=spam message 1|another spam text|unwanted phrase
 
 # Debug
 LOG_ONLY_WEBHOOKS=0
+DB_PATH=                              # opcional, por defecto users.db en la raíz
 ```
+
+### Variables de entorno de las respuestas automáticas
+
+| Variable | Por defecto | Qué hace |
+|---|---|---|
+| `REPLY_MODE` | `shadow` | `shadow`: el motor decide para todo el mundo y escribe `[shadow] would send <kind> to <id>` en el log, pero solo envía de verdad a `TEST_USER_IDS`. `live`: envía a todo el mundo. |
+| `TEST_USER_IDS` | vacío | Lista de IGSID separados por comas que reciben mensajes reales en modo `shadow`. |
+| `PUBLIC_BASE_URL` | `https://carlotes.ganxo.net` | URL pública de este contenedor. El vídeo tutorial se envía como `<PUBLIC_BASE_URL>/media/tutorial-import-es.mp4`. |
+| `CREATOR_FOLLOWER_THRESHOLD` | `5000` | Con este número de seguidores o más, la persona se trata como creador/marca y no se le responde. |
+| `DB_PATH` | `users.db` en la raíz | Ruta de la base de datos SQLite. |
+
+**Eliminadas** (ya no se leen): `IG_FIRST_TIME_MESSAGE`, `IG_RETURNING_MESSAGE`, `ENABLE_ACK_MESSAGE`, `ACK_MESSAGE`, `ACK_WINDOW_DAYS`. Los textos fijos de antes y el ACK automático a los mensajes de texto desaparecen: todos los textos están en `src/messages.js`.
 
 ## 🔐 Autenticación OAuth
 
@@ -132,11 +144,10 @@ services:
       - IG_APP_SECRET=${IG_APP_SECRET}
       - IG_REDIRECT_URI=${IG_REDIRECT_URI}
       - IG_LOGIN_SCOPES=${IG_LOGIN_SCOPES}
-      - IG_FIRST_TIME_MESSAGE=${IG_FIRST_TIME_MESSAGE}
-      - IG_RETURNING_MESSAGE=${IG_RETURNING_MESSAGE}
-      - ENABLE_ACK_MESSAGE=${ENABLE_ACK_MESSAGE:-true}
-      - ACK_MESSAGE=${ACK_MESSAGE}
-      - ACK_WINDOW_DAYS=${ACK_WINDOW_DAYS:-7}
+      - REPLY_MODE=${REPLY_MODE:-shadow}
+      - TEST_USER_IDS=${TEST_USER_IDS}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://carlotes.ganxo.net}
+      - CREATOR_FOLLOWER_THRESHOLD=${CREATOR_FOLLOWER_THRESHOLD:-5000}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - NOTIFY_NON_REEL_MESSAGES=${NOTIFY_NON_REEL_MESSAGES:-true}
@@ -156,10 +167,39 @@ Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare 
 
 ## 🔧 Funcionalidades
 
-### Detección Automática
-- **Reels/Posts**: Detecta URLs de Instagram y adjuntos tipo `ig_reel`, `share`
-- **Mensajes de texto**: Respuesta de confirmación configurable
-- **Primera vez vs. recurrente**: Mensajes diferentes para nuevos usuarios
+### Respuestas automáticas a recetas
+
+Mucha gente comparte un reel de receta con nuestro DM en vez de con la app (Compartir → Compartir en... → CookNest). El bot les enseña el gesto, sin repetirse y sin meterse en conversaciones.
+
+**Qué cuenta como receta:** reels/posts compartidos de forma nativa (adjuntos `ig_reel`, `reel`, `ig_post`, `share`; `story`/`ig_story`/`template` solo si llevan contenido compartido), enlaces `instagram.com/reel|reels|p/` (con un comentario corto, máx. 40 caracteres) y vídeos de TikTok o YouTube Shorts solo si el mensaje es únicamente el enlace. Cualquier otro texto o enlace no tiene respuesta automática (se avisa por Telegram como siempre).
+
+**Cuándo calla** (y avisa por Telegram), en este orden:
+1. Ráfaga: reels a menos de 2 minutos del anterior. El primero espera 60 s y se decide una sola vez para todos.
+2. Un humano del equipo le ha escrito en los últimos 14 días. Se detecta por los ecos: el bot guarda el `message_id` de todo lo que envía, y un eco con otro `mid` es de un humano.
+3. Ha escrito texto libre (no reels, no botones) en las últimas 24 h y nadie le ha contestado.
+4. Le seguimos, es una cuenta verificada o tiene `CREATOR_FOLLOWER_THRESHOLD` seguidores o más (User Profile API, en caché 24 h). Si el perfil no se puede consultar: silencio para enlaces, flujo normal para reels compartidos.
+5. Ya le respondimos hace menos de 1 hora.
+
+**Escalado por persona:**
+- Nivel 1 (primera vez, también para usuarios antiguos): vídeo tutorial + mensaje corto con su nombre si parece un nombre real + 3 botones (quick replies): «Ya me sale ✅», «No me sale CookNest», «No tengo la app».
+- Nivel 2 (siguiente reel en menos de 30 días): una línea, rotando variantes.
+- Nivel 3 y más: silencio. Telegram, una vez al día como máximo: «<nombre> (@usuario) te ha enviado N reels esta semana, escríbele tú».
+- Tras 30 días sin reels, el siguiente vuelve al nivel 2.
+
+**Botones:** «Ya me sale» → una línea alegre. «No me sale CookNest» → dónde se esconde el icono + `https://cooknest.app/tutorial`, y aviso a Telegram. «No tengo la app» → qué hace CookNest + `https://cooknest.app`.
+
+**Idiomas:** castellano, catalán e inglés, según el texto que la persona nos haya escrito (librería `eld`); castellano si no ha escrito nada.
+
+**Código:** `src/engine.js` tiene la decisión como función pura `decide(state, event, now) -> action`; `src/responder.js` reúne el estado, espera las ráfagas, llama a `decide()` y ejecuta la acción. Todos los textos están en `src/messages.js`. El vídeo está en `public/media/tutorial-import-es.mp4` (servido por Express desde `public/`).
+
+### Pruebas y herramientas
+
+```bash
+npm test                                             # node:test, casos sacados del log real
+node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db]
+                                                     # repasa el log de producción con el motor nuevo, no envía nada
+node scripts/export-messages.js MESSAGES.md          # todos los textos en una lista para revisar
+```
 
 ### Notificaciones Telegram
 - **Mensajes importantes**: Notifica cuando usuarios envían mensajes (no reels)
@@ -172,10 +212,9 @@ Para usar en producción necesitas un proxy reverso (nginx, traefik, cloudflare 
 - **Formato compacto**: `**Nombre Usuario**: mensaje...`
 
 ### Base de Datos
-- **SQLite local**: Tracking de usuarios, mensajes y token de Instagram
+- **SQLite local**: Tracking de usuarios, mensajes y token de Instagram. Las migraciones solo añaden tablas y columnas (`reply_state`, `bot_messages`, `recipe_events`), así que un `users.db` existente sigue funcionando
 - **Single-account design**: Solo un token de Instagram almacenado
 - **Persistente**: Datos sobreviven reinicios del contenedor
-- **Ventana configurable**: Control de frecuencia de mensajes
 - **Token refresh**: Renovación automática cada 24h cuando está próximo a expirar
 
 ## 🔒 Seguridad
