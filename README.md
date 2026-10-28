@@ -174,7 +174,7 @@ Mucha gente comparte un reel de receta con nuestro DM en vez de con la app (Comp
 **Qué cuenta como receta:** reels/posts compartidos de forma nativa (adjuntos `ig_reel`, `reel`, `ig_post`, `share`; `story`/`ig_story`/`template` solo si llevan contenido compartido), enlaces `instagram.com/reel|reels|p/` (con un comentario corto, máx. 40 caracteres) y vídeos de TikTok o YouTube Shorts solo si el mensaje es únicamente el enlace. Cualquier otro texto o enlace no tiene respuesta automática (se avisa por Telegram como siempre).
 
 **Cuándo calla** (y avisa por Telegram), en este orden:
-1. Ráfaga: reels a menos de 2 minutos del anterior. El primero espera 3 s (para recoger el texto que llega junto al reel, 0-2 s) y se decide una sola vez para todos.
+1. Ráfaga: reels a menos de 2 minutos del anterior. El primero se contesta al instante; los siguientes de la ráfaga quedan en silencio.
 2. Un humano del equipo le ha escrito en los últimos 14 días. Se detecta por los ecos: el bot guarda el `message_id` de todo lo que envía, y un eco con otro `mid` es de un humano.
 3. Ha escrito texto libre (no reels, no botones) en las últimas 24 h y nadie le ha contestado.
 4. Le seguimos, es una cuenta verificada o tiene `CREATOR_FOLLOWER_THRESHOLD` seguidores o más (User Profile API, en caché 24 h). Si el perfil no se puede consultar: silencio para enlaces, flujo normal para reels compartidos.
