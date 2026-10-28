@@ -1,5 +1,6 @@
 const express = require("express");
 const morgan = require("morgan");
+const path = require("path");
 require("dotenv").config();
 
 const { isInstagramMediaMessage, hasSharedUrls } = require("./detect");
@@ -27,6 +28,9 @@ app.use(
 app.get("/health", (_req, res) => {
   res.status(200).send("OK");
 });
+
+// Tutorial video and other public files (sent to Instagram as attachments)
+app.use(express.static(path.join(__dirname, "..", "public"), { maxAge: "1d" }));
 
 // OAuth routes
 app.use(instagramAuthRouter);

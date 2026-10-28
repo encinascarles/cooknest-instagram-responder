@@ -15,6 +15,7 @@ RUN npm ci --omit=dev
 
 # Copy all source files
 COPY src ./src
+COPY public ./public
 
 # Expose port
 EXPOSE 3000
