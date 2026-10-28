@@ -22,7 +22,7 @@ test("13 reels in 20 minutes (Nati, 2025-11-08) get one reply", async () => {
   assert.equal(h.repliesTo(user)[0].action.kind, "level1");
   // Level 1 = tutorial video + text with quick replies
   assert.deepEqual(h.sentTo(user).map((s) => (s.message.video ? "video" : "text")), ["video", "text"]);
-  assert.equal(h.sentTo(user)[0].message.video, "https://example.test/media/tutorial-import-es.mp4");
+  assert.equal(h.sentTo(user)[0].message.video, "https://example.test/media/tutorial-instagram-es.mp4");
   assert.ok(reasons(h, user).every((r) => ["level1", "burst", "cooldown"].includes(r)), reasons(h, user).join(","));
 });
 

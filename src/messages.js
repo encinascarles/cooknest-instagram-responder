@@ -8,7 +8,12 @@ const DEFAULT_LANGUAGE = "es";
 
 const TUTORIAL_URL = "https://cooknest.app/tutorial";
 const APP_URL = "https://cooknest.app";
-const TUTORIAL_VIDEO_PATH = "/media/tutorial-import-es.mp4"; // Spanish video, used for every language
+// Instagram share tutorial (the in-app tutorial clips with captions), one per language
+const TUTORIAL_VIDEO_PATHS = {
+  es: "/media/tutorial-instagram-es.mp4",
+  ca: "/media/tutorial-instagram-ca.mp4",
+  en: "/media/tutorial-instagram-en.mp4",
+};
 
 // Quick reply payloads arrive back as "<KEY>|<lang>" in message.quick_reply.payload
 const QUICK_REPLY_KEYS = ["WORKS", "NO_ICON", "NO_APP"];
@@ -29,19 +34,19 @@ const GREETINGS = {
 // video, with the three quick replies attached.
 const LEVEL1 = {
   es: [
-    (hi) => `${hi} Parece que querías guardar esta receta en tu recetario 🐥 En el vídeo te enseño cómo hacerlo desde el reel en 20 segundos, ¿te sale?`,
+    (hi) => `${hi} Parece que querías guardar esta receta en tu recetario 🐥 En el vídeo te enseño cómo hacerlo desde el reel en un momento, ¿te sale?`,
     (hi) => `${hi} Esta receta ha llegado a nuestro chat y no a tu recetario, nos pasa a todos. En el vídeo lo ves: Compartir y luego CookNest, ¿te sale?`,
     (hi) => `${hi} Para que esta receta se quede en tu recetario, compártela desde el reel con la app CookNest 🐥 Te dejo un vídeo cortito de cómo se hace, ¿te sale?`,
     (hi) => `${hi} Qué buena pinta tiene esta receta. Se guarda en tu recetario compartiéndola con CookNest, te lo enseño en el vídeo, ¿te sale?`,
   ],
   ca: [
-    (hi) => `${hi} Sembla que volies guardar aquesta recepta al teu receptari 🐥 Al vídeo t'ensenyo com fer-ho des del reel en 20 segons, et surt?`,
+    (hi) => `${hi} Sembla que volies guardar aquesta recepta al teu receptari 🐥 Al vídeo t'ensenyo com fer-ho des del reel en un moment, et surt?`,
     (hi) => `${hi} Aquesta recepta ha arribat al nostre xat i no al teu receptari, ens passa a tots. Al vídeo ho veus: Comparteix i després CookNest, et surt?`,
     (hi) => `${hi} Perquè aquesta recepta es quedi al teu receptari, comparteix-la des del reel amb l'app CookNest 🐥 Et deixo un vídeo curtet de com es fa, et surt?`,
     (hi) => `${hi} Quina bona pinta té aquesta recepta. Es guarda al teu receptari compartint-la amb CookNest, t'ho ensenyo al vídeo, et surt?`,
   ],
   en: [
-    (hi) => `${hi} Looks like you wanted to save this recipe to CookNest 🐥 The video shows how to do it from the reel in 20 seconds, does it work for you?`,
+    (hi) => `${hi} Looks like you wanted to save this recipe to CookNest 🐥 The video shows how to do it from the reel in a few seconds, does it work for you?`,
     (hi) => `${hi} This recipe landed in our chat instead of your CookNest recipes, it happens to all of us. The video shows how: Share, then CookNest. Does it work?`,
     (hi) => `${hi} To keep this recipe in CookNest, share it from the reel to the CookNest app 🐥 Here is a short video showing how, does it work for you?`,
     (hi) => `${hi} This recipe looks great. You save it to CookNest by sharing it to the app, the video shows how. Does it work for you?`,
@@ -162,7 +167,7 @@ function buildMessages(kind, { lang, variant = 0, firstName = null, publicBaseUr
   if (kind === "level1") {
     const messages = [];
     if (publicBaseUrl) {
-      messages.push({ video: publicBaseUrl.replace(/\/+$/, "") + TUTORIAL_VIDEO_PATH });
+      messages.push({ video: publicBaseUrl.replace(/\/+$/, "") + TUTORIAL_VIDEO_PATHS[language] });
     }
     messages.push({ text: template(GREETINGS[language](firstName)), quickReplies: quickReplies(language) });
     return messages;
@@ -186,7 +191,7 @@ module.exports = {
   DEFAULT_LANGUAGE,
   TUTORIAL_URL,
   APP_URL,
-  TUTORIAL_VIDEO_PATH,
+  TUTORIAL_VIDEO_PATHS,
   QUICK_REPLY_KEYS,
   QUICK_REPLY_TITLES,
   GREETINGS,

@@ -97,7 +97,7 @@ DB_PATH=                              # opcional, por defecto users.db en la ra�
 |---|---|---|
 | `REPLY_MODE` | `shadow` | `shadow`: el motor decide para todo el mundo y escribe `[shadow] would send <kind> to <id>` en el log, pero solo envía de verdad a `TEST_USER_IDS`. `live`: envía a todo el mundo. |
 | `TEST_USER_IDS` | vacío | Lista de IGSID separados por comas que reciben mensajes reales en modo `shadow`. |
-| `PUBLIC_BASE_URL` | `https://carlotes.ganxo.net` | URL pública de este contenedor. El vídeo tutorial se envía como `<PUBLIC_BASE_URL>/media/tutorial-import-es.mp4`. |
+| `PUBLIC_BASE_URL` | `https://carlotes.ganxo.net` | URL pública de este contenedor. El vídeo tutorial se envía como `<PUBLIC_BASE_URL>/media/tutorial-instagram-<es|ca|en>.mp4`. |
 | `CREATOR_FOLLOWER_THRESHOLD` | `5000` | Con este número de seguidores o más, la persona se trata como creador/marca y no se le responde. |
 | `DB_PATH` | `users.db` en la raíz | Ruta de la base de datos SQLite. |
 
@@ -190,7 +190,7 @@ Mucha gente comparte un reel de receta con nuestro DM en vez de con la app (Comp
 
 **Idiomas:** castellano, catalán e inglés, según el texto que la persona nos haya escrito (librería `eld`); castellano si no ha escrito nada.
 
-**Código:** `src/engine.js` tiene la decisión como función pura `decide(state, event, now) -> action`; `src/responder.js` reúne el estado, espera las ráfagas, llama a `decide()` y ejecuta la acción. Todos los textos están en `src/messages.js`. El vídeo está en `public/media/tutorial-import-es.mp4` (servido por Express desde `public/`).
+**Código:** `src/engine.js` tiene la decisión como función pura `decide(state, event, now) -> action`; `src/responder.js` reúne el estado, espera las ráfagas, llama a `decide()` y ejecuta la acción. Todos los textos están en `src/messages.js`. Los vídeos están en `public/media/tutorial-instagram-<es|ca|en>.mp4` (generados con los clips del tutorial de Instagram de la app) (servido por Express desde `public/`).
 
 ### Pruebas y herramientas
 

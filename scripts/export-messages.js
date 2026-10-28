@@ -18,11 +18,11 @@ const p = (line = "") => lines.push(line);
 p("# Textos del bot de Instagram (para revisar)");
 p();
 p("Generado desde `src/messages.js` con `node scripts/export-messages.js`. Para cambiar un texto, edita ese archivo.");
-p("Idioma: el del texto que la persona nos haya escrito (castellano, catalán o inglés); castellano si nunca ha escrito texto. El vídeo es en castellano para todos.");
+p("Idioma: el del texto que la persona nos haya escrito (castellano, catalán o inglés); castellano si nunca ha escrito texto. El vídeo va en el mismo idioma.");
 p();
 p("## Nivel 1: primer reel (vídeo tutorial + texto + 3 botones)");
 p();
-p("Orden: 1) el vídeo de 22 s, 2) uno de estos textos (se elige rotando por persona) con los botones debajo. Con nombre cuando el perfil tiene un nombre de pila reconocible, si no sin nombre.");
+p("Orden: 1) el vídeo tutorial de Instagram del idioma de la persona (28 s: los clips del tutorial de la app con los pasos escritos), 2) uno de estos textos (se elige rotando por persona) con los botones debajo. Con nombre cuando el perfil tiene un nombre de pila reconocible, si no sin nombre.");
 for (const lang of m.LANGUAGES) {
   p();
   p(`### ${LANGUAGE_NAMES[lang]}`);

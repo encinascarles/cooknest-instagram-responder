@@ -61,7 +61,7 @@ test("answers carry the right links", () => {
 
 test("level 1 = video first, then the text with quick replies", () => {
   const built = messages.buildMessages("level1", { lang: "en", variant: 1, firstName: "Sel", publicBaseUrl: "https://carlotes.ganxo.net/" });
-  assert.deepEqual(built[0], { video: "https://carlotes.ganxo.net/media/tutorial-import-es.mp4" });
+  assert.deepEqual(built[0], { video: "https://carlotes.ganxo.net/media/tutorial-instagram-en.mp4" });
   assert.match(built[1].text, /^Hi Sel!/);
   assert.deepEqual(built[1].quickReplies.map((q) => q.payload), ["WORKS|en", "NO_ICON|en", "NO_APP|en"]);
 });
