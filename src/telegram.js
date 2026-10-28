@@ -45,6 +45,31 @@ class TelegramNotifier {
     await this.sendMessage(`${profileLink(userProfile)}: ${escapeHtml(truncate(messageText, 100))}`);
   }
 
+  // A reel/link we did not answer because of a conversation or creator rule
+  async notifyRecipeNotAnswered(userProfile, messageText, reasonLabel) {
+    if (!this.isConfigured()) return;
+    if (isExcludedMessage(messageText)) return;
+
+    await this.sendMessage(
+      `${profileLink(userProfile)}: ${escapeHtml(truncate(messageText, 100))}\n<i>Sin respuesta automática: ${escapeHtml(reasonLabel)}</i>`
+    );
+  }
+
+  // Level 3+: the bot stays silent, a human should write to them
+  async notifyRepeatedReels(userProfile, reelsThisWeek) {
+    if (!this.isConfigured()) return;
+
+    const reels = reelsThisWeek === 1 ? '1 reel' : `${reelsThisWeek} reels`;
+    await this.sendMessage(`🔁 ${profileLink(userProfile)} te ha enviado ${reels} esta semana, escríbele tú`);
+  }
+
+  // Quick reply "No me sale CookNest": the bot explained, a human should follow up
+  async notifyNeedsHelp(userProfile) {
+    if (!this.isConfigured()) return;
+
+    await this.sendMessage(`🆘 ${profileLink(userProfile)} no encuentra CookNest al compartir. Le he enviado el tutorial, escríbele tú si hace falta`);
+  }
+
   async notifyError(errorType, errorMessage, additionalInfo = '') {
     if (!this.isConfigured()) return;
 

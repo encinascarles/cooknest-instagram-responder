@@ -1,6 +1,6 @@
 const axios = require("axios");
 const { userDb } = require("./database");
-const { logger } = require("./logger");
+const { describeError } = require("./logger");
 const { telegramNotifier } = require("./telegram");
 
 async function getInstagramToken() {
@@ -32,24 +32,48 @@ async function getInstagramToken() {
   return { igUserId: instagramAccountId, accessToken: tokenRecord.access_token };
 }
 
-async function sendTextMessage(psid, text) {
+const GRAPH_VERSION = "v20.0";
+
+// Converts an engine message ({text, quickReplies} or {video}) to the Instagram
+// Messaging API shape (Instagram API with Instagram Login).
+function toInstagramMessage(message) {
+  if (message.video) {
+    return { attachment: { type: "video", payload: { url: message.video } } };
+  }
+  const payload = { text: message.text };
+  if (Array.isArray(message.quickReplies) && message.quickReplies.length > 0) {
+    payload.quick_replies = message.quickReplies.map(({ title, payload: postback }) => ({
+      content_type: "text",
+      title,
+      payload: postback,
+    }));
+  }
+  return payload;
+}
+
+/**
+ * Sends one message and returns the API response ({recipient_id, message_id}).
+ * @param {string} psid Instagram-scoped id of the recipient
+ * @param {{text?: string, quickReplies?: Array, video?: string}} message
+ */
+async function sendMessage(psid, message) {
   try {
     const { igUserId, accessToken } = await getInstagramToken();
 
     const payload = {
       recipient: { id: psid },
-      message: { text },
+      message: toInstagramMessage(message),
     };
-    console.log("sendTextMessage payload", payload);
-    const url = `https://graph.instagram.com/v20.0/${igUserId}/messages?access_token=${accessToken}`;
+    console.log("sendMessage payload", JSON.stringify(payload));
+    const url = `https://graph.instagram.com/${GRAPH_VERSION}/${igUserId}/messages?access_token=${accessToken}`;
 
-    const response = await axios.post(url, payload);
+    const response = await axios.post(url, payload, { timeout: 30000 });
 
-    console.log("sendTextMessage response", response.data);
+    console.log("sendMessage response", response.data);
     return response.data;
   } catch (error) {
     // Extract error details
-    const errorDetail = error?.response?.data?.error?.message || error?.message || "Unknown error";
+    const errorDetail = error?.response?.data?.error?.message || describeError(error) || "Unknown error";
     const errorCode = error?.response?.data?.error?.code;
     
     // Check if it's a token-related error
@@ -65,4 +89,8 @@ async function sendTextMessage(psid, text) {
   }
 }
 
-module.exports = { sendTextMessage };
+async function sendTextMessage(psid, text) {
+  return sendMessage(psid, { text });
+}
+
+module.exports = { sendMessage, sendTextMessage, toInstagramMessage, GRAPH_VERSION };
