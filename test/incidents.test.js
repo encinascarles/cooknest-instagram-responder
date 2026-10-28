@@ -108,7 +108,7 @@ test("free text right after a reel, inside the debounce wait (text that comes wi
   const h = await makeHarness();
   const user = "3140806602756539";
   await h.reel(user);
-  await h.wait(10 * 1000);
+  await h.wait(2 * 1000);
   await h.text(user, "He passat aquesta per si teniu controlada aquesta cuinera. Molt bona!");
   await h.time.runAll();
   assert.equal(h.sent.length, 0);

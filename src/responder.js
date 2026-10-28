@@ -5,7 +5,7 @@
 const { decide, classifyEcho } = require("./engine");
 const { classifyMessage } = require("./detect");
 
-const DEFAULT_DEBOUNCE_MS = 20 * 1000; // short: people wait for the answer; later reels are caught by the burst/cooldown rules
+const DEFAULT_DEBOUNCE_MS = 3 * 1000; // feels instant; still catches the text people send together with the reel (0-2 s)
 
 // Fields that are facts about the person, kept even when nothing was sent
 const OBSERVED_FIELDS = ["lastRecipeAt", "lastFreeTextAt", "lang"];
