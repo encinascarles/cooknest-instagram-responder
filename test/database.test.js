@@ -77,3 +77,56 @@ test("sqlite store and memory store behave the same", async (t) => {
   assert.equal(results[0].shadow.level, 1);
   assert.equal(results[0].shadow.lang, "ca");
 });
+
+test("Remy bridge tables: sqlite and memory store behave the same", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "igr-db-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const sqlite = new UserDatabase(path.join(dir, "users.db"));
+  const memory = new MemoryStore();
+  const now = Date.parse("2026-11-16T10:00:00Z");
+
+  const results = [];
+  for (const store of [sqlite, memory]) {
+    await store.recordRemyMessage("mid.remy.1", "u", now);
+    const added = [];
+    for (const [eventId, at] of [["a", now - 50 * 3600000], ["b", now - 1000], ["a", now], ["c", now]]) {
+      added.push(await store.outboxAdd({ eventId, account: "acc", payload: JSON.stringify({ id: eventId }), createdAt: at }));
+    }
+    const head = await store.outboxHead(2);
+    await store.outboxFailed(head.map((r) => r.id), now + 10000, "HTTP 502");
+    const afterFail = (await store.outboxHead(10)).map(({ id, ...rest }) => rest);
+    const stats = await store.outboxStats();
+    const dropped = await store.outboxDropOlderThan(now - 48 * 3600000);
+    const remaining = (await store.outboxHead(10)).map((r) => r.eventId);
+    await store.outboxDelete((await store.outboxHead(1)).map((r) => r.id));
+    await store.saveIdempotentAnswer("k1", 200, { messageIds: ["m1"] }, now);
+    await store.saveIdempotentAnswer("old", 200, { messageIds: ["m0"] }, now - 25 * 3600000);
+    await store.saveProfile("u", { name: "Ana", username: "ana", profilePic: "https://cdn.test/ana.jpg", followerCount: 3, isBusinessFollowUser: false, isVerifiedUser: false, isUserFollowBusiness: true }, now);
+    results.push({
+      remy: await store.isRemyMessage("mid.remy.1"),
+      notRemy: await store.isRemyMessage("mid.other"),
+      added,
+      afterFail,
+      stats,
+      dropped,
+      remaining,
+      left: (await store.outboxHead(10)).map((r) => r.eventId),
+      idem: await store.getIdempotentAnswer("k1", now + 1000),
+      expired: await store.getIdempotentAnswer("k1", now + 25 * 3600000),
+      old: await store.getIdempotentAnswer("old", now),
+      pic: (await store.getCachedProfile("u")).profile.profilePic,
+    });
+  }
+  await sqlite.close();
+  assert.deepEqual(results[0], results[1]);
+  const r = results[0];
+  assert.deepEqual(r.added, [true, true, false, true]);
+  assert.deepEqual(r.afterFail.map((x) => [x.eventId, x.attempts, x.lastError]), [["a", 1, "HTTP 502"], ["b", 1, "HTTP 502"], ["c", 0, null]]);
+  assert.deepEqual(r.stats, { queued: 3, oldestAt: now - 50 * 3600000, lastError: "HTTP 502" });
+  assert.equal(r.dropped, 1);
+  assert.deepEqual(r.remaining, ["b", "c"]);
+  assert.deepEqual(r.left, ["c"]);
+  assert.deepEqual(r.idem, { status: 200, body: { messageIds: ["m1"] } });
+  assert.equal(r.expired, null);
+  assert.equal(r.pic, "https://cdn.test/ana.jpg");
+});

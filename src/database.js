@@ -4,6 +4,7 @@ const { SHARED_FIELDS, MODE_FIELDS, RECIPE_COUNT_WINDOW_MS, RECIPE_RETENTION_MS,
 
 const DEFAULT_DB_PATH = path.join(__dirname, '..', 'users.db');
 const BOT_MESSAGE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 // Columns added to the original users table. Migrations are additive only: the
 // production users.db keeps working with older versions of the bot.
@@ -113,6 +114,29 @@ class UserDatabase {
           received_at INTEGER NOT NULL
         )`);
       await this.run('CREATE INDEX IF NOT EXISTS recipe_events_user ON recipe_events (user_id, received_at)');
+      // Remy bridge (see README "Remy bridge"): mids sent from Remy, events waiting
+      // to be forwarded to Remy, and the answers to Remy's send requests
+      await this.run(`CREATE TABLE IF NOT EXISTS remy_messages (
+          mid TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          at INTEGER NOT NULL
+        )`);
+      await this.run(`CREATE TABLE IF NOT EXISTS remy_outbox (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event_id TEXT NOT NULL UNIQUE,
+          account TEXT,
+          payload TEXT NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          next_at INTEGER NOT NULL,
+          last_error TEXT,
+          created_at INTEGER NOT NULL
+        )`);
+      await this.run(`CREATE TABLE IF NOT EXISTS remy_idempotency (
+          key TEXT PRIMARY KEY,
+          status INTEGER NOT NULL,
+          body TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`);
     } catch (err) {
       console.error('Error migrating users.db:', err);
       throw err;
@@ -204,7 +228,7 @@ class UserDatabase {
   async getCachedProfile(userId) {
     await this.ready;
     const row = await this.get(
-      `SELECT username, full_name, follower_count, is_business_follow_user, is_verified_user,
+      `SELECT username, full_name, profile_pic, follower_count, is_business_follow_user, is_verified_user,
               is_user_follow_business, profile_checked_at
          FROM users WHERE user_id = ?`,
       [userId]
@@ -218,6 +242,7 @@ class UserDatabase {
         isBusinessFollowUser: toBoolean(row.is_business_follow_user),
         isVerifiedUser: toBoolean(row.is_verified_user),
         isUserFollowBusiness: toBoolean(row.is_user_follow_business),
+        profilePic: row.profile_pic ?? null,
       },
       checkedAt: row.profile_checked_at ?? null,
     };
@@ -226,12 +251,13 @@ class UserDatabase {
   async saveProfile(userId, profile, checkedAt) {
     await this.ready;
     await this.run(
-      `INSERT INTO users (user_id, username, full_name, follower_count, is_business_follow_user,
+      `INSERT INTO users (user_id, username, full_name, profile_pic, follower_count, is_business_follow_user,
                           is_verified_user, is_user_follow_business, profile_checked_at, last_profile_update)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(user_id) DO UPDATE SET
          username = excluded.username,
          full_name = excluded.full_name,
+         profile_pic = excluded.profile_pic,
          follower_count = excluded.follower_count,
          is_business_follow_user = excluded.is_business_follow_user,
          is_verified_user = excluded.is_verified_user,
@@ -242,12 +268,107 @@ class UserDatabase {
         userId,
         profile.username ?? null,
         profile.name ?? null,
+        profile.profilePic ?? null,
         profile.followerCount ?? null,
         toInteger(profile.isBusinessFollowUser),
         toInteger(profile.isVerifiedUser),
         toInteger(profile.isUserFollowBusiness),
         checkedAt,
       ]
+    );
+  }
+
+  // --- Remy bridge ---
+
+  async recordRemyMessage(mid, userId, at) {
+    await this.ready;
+    await this.run('INSERT OR IGNORE INTO remy_messages (mid, user_id, at) VALUES (?, ?, ?)', [mid, userId, at]);
+    await this.run('DELETE FROM remy_messages WHERE at < ?', [at - BOT_MESSAGE_RETENTION_MS]);
+  }
+
+  async isRemyMessage(mid) {
+    await this.ready;
+    return Boolean(await this.get('SELECT mid FROM remy_messages WHERE mid = ?', [mid]));
+  }
+
+  // Returns false when an event with this id is already waiting
+  async outboxAdd({ eventId, account, payload, createdAt }) {
+    await this.ready;
+    const result = await this.run(
+      `INSERT OR IGNORE INTO remy_outbox (event_id, account, payload, attempts, next_at, created_at)
+       VALUES (?, ?, ?, 0, ?, ?)`,
+      [eventId, account ?? null, payload, createdAt, createdAt]
+    );
+    return result.changes > 0;
+  }
+
+  // The oldest events first
+  async outboxHead(limit) {
+    await this.ready;
+    const rows = await this.all(
+      `SELECT id, event_id, account, payload, attempts, next_at, last_error, created_at
+         FROM remy_outbox ORDER BY id LIMIT ?`,
+      [limit]
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      eventId: row.event_id,
+      account: row.account,
+      payload: row.payload,
+      attempts: row.attempts,
+      nextAt: row.next_at,
+      lastError: row.last_error,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async outboxDelete(ids) {
+    await this.ready;
+    if (ids.length === 0) return;
+    await this.run(`DELETE FROM remy_outbox WHERE id IN (${ids.map(() => '?').join(', ')})`, ids);
+  }
+
+  async outboxFailed(ids, nextAt, error) {
+    await this.ready;
+    if (ids.length === 0) return;
+    await this.run(
+      `UPDATE remy_outbox SET attempts = attempts + 1, next_at = ?, last_error = ?
+        WHERE id IN (${ids.map(() => '?').join(', ')})`,
+      [nextAt, error, ...ids]
+    );
+  }
+
+  // Deletes the events created before `before`; returns how many
+  async outboxDropOlderThan(before) {
+    await this.ready;
+    const result = await this.run('DELETE FROM remy_outbox WHERE created_at < ?', [before]);
+    return result.changes;
+  }
+
+  async outboxStats() {
+    await this.ready;
+    const row = await this.get('SELECT COUNT(*) AS queued, MIN(created_at) AS oldestAt FROM remy_outbox');
+    const last = await this.get('SELECT last_error FROM remy_outbox WHERE last_error IS NOT NULL ORDER BY id LIMIT 1');
+    return { queued: row.queued, oldestAt: row.oldestAt ?? null, lastError: last ? last.last_error : null };
+  }
+
+  // The first answer to a Remy send request, kept 24 h
+  async getIdempotentAnswer(key, now) {
+    await this.ready;
+    const row = await this.get('SELECT status, body FROM remy_idempotency WHERE key = ? AND created_at >= ?', [
+      key,
+      now - IDEMPOTENCY_RETENTION_MS,
+    ]);
+    return row ? { status: row.status, body: JSON.parse(row.body) } : null;
+  }
+
+  async saveIdempotentAnswer(key, status, body, now) {
+    await this.ready;
+    await this.run('DELETE FROM remy_idempotency WHERE created_at < ?', [now - IDEMPOTENCY_RETENTION_MS]);
+    await this.run(
+      `INSERT INTO remy_idempotency (key, status, body, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET status = excluded.status, body = excluded.body, created_at = excluded.created_at`,
+      [key, status, JSON.stringify(body), now]
     );
   }
 
@@ -286,6 +407,7 @@ let defaultDb = null;
 
 module.exports = {
   UserDatabase,
+  IDEMPOTENCY_RETENTION_MS,
   get userDb() {
     if (!defaultDb) defaultDb = new UserDatabase();
     return defaultDb;
