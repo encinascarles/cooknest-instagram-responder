@@ -86,6 +86,11 @@ TELEGRAM_CHAT_ID=tu-chat-id
 NOTIFY_NON_REEL_MESSAGES=true
 EXCLUDED_SENTENCES=spam message 1|another spam text|unwanted phrase
 
+# Remy bridge (opcional, ver "Remy bridge")
+REMY_BRIDGE_SECRET=                   # vacío: sin reenvío y /internal/remy/* responde 404
+REMY_FORWARD_URL=https://remy.perigeu.com/api/public/instagram/17841473716984633
+REMY_MEDIA_DIR=                       # opcional, por defecto <tmp>/cooknest-remy-media
+
 # Debug
 LOG_ONLY_WEBHOOKS=0
 DB_PATH=                              # opcional, por defecto users.db en la raíz
@@ -196,7 +201,7 @@ Mucha gente comparte un reel de receta con nuestro DM en vez de con la app (Comp
 
 ```bash
 npm test                                             # node:test, casos sacados del log real
-node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db]
+node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db] [--forward] [--decisions decisions.jsonl]
                                                      # repasa el log de producción con el motor nuevo, no envía nada
 node scripts/export-messages.js MESSAGES.md          # todos los textos en una lista para revisar
 ```
@@ -216,6 +221,101 @@ node scripts/export-messages.js MESSAGES.md          # todos los textos en una l
 - **Single-account design**: Solo un token de Instagram almacenado
 - **Persistente**: Datos sobreviven reinicios del contenedor
 - **Token refresh**: Renovación automática cada 24h cuando está próximo a expirar
+
+## Remy bridge
+
+Remy (the CRM) shows the @cooknest.app DMs. Meta has one webhook URL, so this responder stays the front door: it keeps answering exactly as before and hands every Instagram messaging event to Remy. It also owns the token: Remy sends and reads through it. Code: `src/remy-bridge.js` (outbox), `src/remy-routes.js` (endpoints), `src/remy-media.js` (temporary files), `src/remy-signature.js`.
+
+### Environment variables
+
+| Variable | Default | What it does |
+|---|---|---|
+| `REMY_BRIDGE_SECRET` | empty | Shared HMAC secret. Empty: the bridge is off (nothing is forwarded, every `/internal/remy/*` and `/internal-media/*` answers 404). |
+| `REMY_FORWARD_URL` | empty | Full URL events are posted to, e.g. `https://remy.perigeu.com/api/public/instagram/17841473716984633`. Empty: nothing is forwarded (the endpoints still work if the secret is set). |
+| `REMY_MEDIA_DIR` | `<tmp>/cooknest-remy-media` | Where files sent from Remy wait for Graph (1 h). Emptied at startup. |
+| `INSTAGRAM_ACCOUNT_ID` | | Business IG user id (`17841473716984633`): the `account` of every POST, and the sender of `/internal/remy/send`. |
+| `PUBLIC_BASE_URL` | `https://carlotes.ganxo.net` | Base of the file URLs Graph downloads (`<PUBLIC_BASE_URL>/internal-media/<name>`). |
+
+### Signature (both directions)
+
+Every request carries `X-Bridge-Timestamp: <unix seconds>` and `X-Bridge-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>` (a GET signs an empty body). More than 300 s of skew, a bad or missing signature: 401. Compared in constant time.
+
+### Responder -> Remy: `POST <REMY_FORWARD_URL>`
+
+```json
+{ "account": "17841473716984633", "sentAt": "<iso>",
+  "events": [ { "id": "<stable id>", "event": { "...": "entry.messaging[] exactly as Meta sent it" },
+                "origin": "user | bot | human | remy",
+                "bot": { "classified": "recipe|text|quick_reply|other", "decision": "reply|silent|error", "kind": "...", "reason": "..." },
+                "profile": { "igsid", "username", "name", "followerCount", "isVerifiedUser",
+                             "isUserFollowBusiness", "isBusinessFollowUser", "profilePic" } } ] }
+```
+
+- **Every** messaging event goes: messages (text, shares, attachments, story replies and mentions, quick replies), echoes, reactions, reads/seen, edits, unsends and `is_unsupported` ones. The bot still ignores the last ones; only Remy gets them.
+- **Ids** (Remy dedupes by them):
+
+  | Event | `id` |
+  |---|---|
+  | message, echo, `is_unsupported` message | `<mid>` |
+  | unsend (`message.is_deleted`) | `deleted:<mid>` |
+  | `message_edit` | `edit:<mid>:<timestamp>` |
+  | `reaction` (react/unreact) | `reaction:<mid>:<action>:<timestamp>` |
+  | `read` / `messaging_seen` | `read:<mid or watermark>:<timestamp>` |
+  | anything else (postback, referral...) | `<first key besides sender/recipient/timestamp>:<sha1 of the event's JSON>` |
+
+  `<timestamp>` is the event's `timestamp` as Meta sent it (epoch ms).
+- **origin**: an inbound message from the person is `user`. A message from our account is `bot` when its mid is in `bot_messages`, `remy` when it is in `remy_messages`, else `human` (typed on the phone); in-flight sends (the bot's and Remy's) are awaited first, so an echo that beats Graph's send answer is still labelled right. Reads, reactions and edits are `user` from the person and `human` from our account.
+- **bot**: only on inbound messages, sent once the bot has decided. `classified` is `detect.js`'s class; `decision` is `reply` when the engine chose to reply, otherwise `silent` (`kind` and `reason` are the engine's, e.g. `level1`, `burst`, `free_text`). All the reels of one wait group carry the group's decision; a reel silenced by the burst rule carries `silent` + `burst`. If the bot's handling throws: `error`, with the error message as `reason`. With `REPLY_MODE=shadow`, `reply` means the engine's choice even when only logged.
+- **profile**: on inbound messages, the profile the decision used, else the 24 h cache or a fetch (`null` when it fails); on other events, the cached profile or `null`.
+- **Order**: events are posted in the order they become ready: an inbound message after its decision, an echo once its origin is known. Sort by `event.timestamp`.
+
+### Outbox
+
+Forwarding never makes the bot wait and can never throw into it: each event is appended to `remy_outbox` in `users.db` (`event_id` unique, `payload`, `attempts`, `next_at`, `last_error`, `created_at`) and a background sender posts it.
+
+- Up to 50 events per POST, oldest first. Remy answers 2xx = delivered (the rows are deleted); anything else or a network error = retry the same batch after 10 s, doubling up to 30 min. Events queued meanwhile wait behind it.
+- An event still undelivered 48 h after it was queued is dropped, with **one** Telegram line per outage (`⚠️ Remy bridge: N Instagram events could not be delivered...`). The next successful POST ends the outage.
+- At least once: a crash between Remy's 2xx and the delete resends the batch; a Meta webhook retry may resend an event. Remy dedupes by `id`.
+- Remy down = the outbox grows; Remy back = it drains in order. The outbox survives restarts.
+
+### Remy -> responder: `/internal/remy/*`
+
+Over the LAN (`http://192.168.5.3:3000`), signed as above. A request with `cf-connecting-ip` or `cf-ray` (it came through the public Cloudflare host) gets 403 even when signed. Errors are `{ "error": { "status", "message" } }`.
+
+| Endpoint | Answer |
+|---|---|
+| `POST /internal/remy/send` `{ recipientId, text?, file?: { filename, contentType, dataBase64 }, replyToMid?, idempotencyKey }` | `{ messageIds: [...] }`, or Graph's error verbatim with Graph's status: `{ error: { status, code, subcode, message } }` (outside the 24 h window: 400, code 10, subcode 2534022). Never sent with a tag. |
+| `GET /internal/remy/profile/:igsid` | `{ igsid, username, name, followerCount, isVerifiedUser, isUserFollowBusiness, isBusinessFollowUser, profilePic }` (24 h cache, shared with the bot). |
+| `GET /internal/remy/conversations?after=<cursor>` | `{ data: [{ id, updatedTime, participants: [{ id, username }] }], next }` (`me/conversations?platform=instagram`, 50 per page; `next` is Graph's `after` cursor when there is a next page, else `null`). |
+| `GET /internal/remy/conversations/:id/messages?after=<cursor>` | `{ data: [<Graph message>], next }` (`<id>/messages?fields=id,message,created_time,from,to,attachments,shares,story,reactions,is_unsupported`, 50 per page). Graph's objects as they come, minus the nested `paging` links (they carry the access token). |
+| `GET /internal/remy/health` | `{ ok, tokenExpiresAt, igUserId, username, forward: { queued, oldestAt, lastOkAt, lastError } }` |
+
+**send** details:
+- Text first, then the file as its own message when both come; `replyToMid` becomes Graph's `reply_to: { mid }` on the first one.
+- Each resulting mid is stored in `remy_messages` before answering, and the send is registered as in flight for that person, so a concurrent echo waits for it and comes out as `remy`. The first sent message also sets `lastHumanAt = now` (the same update an echo typed on the phone makes), so the bot never talks over a conversation held from Remy.
+- Files: `image/jpeg|png|gif|webp` up to 8 MB -> `image`; `video/mp4|video/quicktime` up to 25 MB -> `video`; `audio/*` up to 25 MB -> `audio`; anything else, empty, too big or bad base64: 422 with the reason. The file is written to `REMY_MEDIA_DIR` and served, public and unsigned (Graph only takes attachments by URL), at `<PUBLIC_BASE_URL>/internal-media/<64 random hex chars>.<ext>` for 1 hour, then deleted (timer + sweep every 10 min); after that, 404.
+- Same `idempotencyKey` again (within 24 h, stored in `remy_idempotency`), or a concurrent duplicate: the first answer again, never a second send. That includes an error answer: retry with a new key.
+- Text sent but the file failed: Graph's error, plus `messageIds` with what did go.
+
+**Reading health**:
+- `ok`: there is a token and it has not expired. `false` means Remy can neither send nor read: re-authorize at `/auth/instagram/start`.
+- `tokenExpiresAt`: when the stored token expires (ISO; the daily token refresh keeps pushing it forward).
+- `igUserId`, `username`: the business account (`username` comes from Graph `me`, cached 1 h; `null` if Graph does not answer).
+- `forward.queued` and `forward.oldestAt`: events waiting in the outbox and when the oldest was queued. A few for a few seconds is normal; a growing number with an old `oldestAt` means Remy is not taking them (drop after 48 h).
+- `forward.lastOkAt`: last delivered POST since this process started (`null` after a restart until the next one). `forward.lastError`: the last failure (`HTTP 503`, `ECONNREFUSED`...), `null` once delivered; `forwarding is off: REMY_FORWARD_URL is not set` when it is off.
+
+### Replay proof
+
+`scripts/replay-log.js --forward` (or `REPLAY_FORWARD=1`) runs the same replay with every event also going through the real outbox to a fake in-memory Remy that checks each signature; `--decisions <file>` writes every decision as a JSON line. Run on the production log of 16-nov-2026 (a copy outside this repo):
+
+```bash
+D=~/workspace/ig-responder/data
+node scripts/replay-log.js $D/bot-tail-20261116.log --users-db $D/users-20261116.db --out /tmp/off.md --decisions /tmp/off.jsonl
+node scripts/replay-log.js $D/bot-tail-20261116.log --users-db $D/users-20261116.db --out /tmp/on.md  --decisions /tmp/on.jsonl --forward
+cmp /tmp/off.jsonl /tmp/on.jsonl   # no output: identical
+```
+
+Result: 2646 decisions both ways, byte for byte identical (461 replies = 771 Instagram messages, 528 + 134 + 195 Telegram lines, the same report as on `main`). With `--forward`: 2971 events reached the fake Remy (2646 `user`, 325 `human`), 2971 distinct ids, 2861 POSTs, 0 bad signatures, outbox empty at the end; inbound by decision: `recipe/reply` 461, `recipe/silent` 1657, `text/silent` 358, `other/silent` 170. `test/replay.test.js` checks the same on a small synthetic log.
 
 ## 🔒 Seguridad
 
