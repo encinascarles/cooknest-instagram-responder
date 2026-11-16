@@ -12,6 +12,9 @@ const { startTokenRefreshScheduler } = require("./token-refresh");
 const { sendMessage } = require("./sender");
 const { Responder } = require("./responder");
 const { initLanguageDetector, detectLanguage } = require("./language");
+const { RemyBridge } = require("./remy-bridge");
+const { MediaStore } = require("./remy-media");
+const { createRemyRouter, createMediaRouter } = require("./remy-routes");
 
 const replyMode = process.env.REPLY_MODE === "live" ? "live" : "shadow";
 const testUserIds = (process.env.TEST_USER_IDS || "")
@@ -19,6 +22,23 @@ const testUserIds = (process.env.TEST_USER_IDS || "")
   .map((id) => id.trim())
   .filter(Boolean);
 const followerThreshold = Number.parseInt(process.env.CREATOR_FOLLOWER_THRESHOLD || "", 10);
+const publicBaseUrl = process.env.PUBLIC_BASE_URL || "https://carlotes.ganxo.net";
+
+// Remy bridge (README "Remy bridge"): without the secret, no forwarding and no /internal/remy
+const remySecret = process.env.REMY_BRIDGE_SECRET || "";
+const remyForwardUrl = process.env.REMY_FORWARD_URL || "";
+const remyBridge =
+  remySecret && remyForwardUrl
+    ? new RemyBridge({
+        store: userDb,
+        url: remyForwardUrl,
+        secret: remySecret,
+        account: process.env.INSTAGRAM_ACCOUNT_ID || "",
+        notify: (text) => telegramNotifier.sendMessage(text),
+        logger,
+      })
+    : null;
+const remyMedia = remySecret ? new MediaStore({ dir: process.env.REMY_MEDIA_DIR || undefined, publicBaseUrl }) : null;
 
 const responder = new Responder({
   store: userDb,
@@ -40,16 +60,33 @@ const responder = new Responder({
     testUserIds,
     botAccountId: process.env.INSTAGRAM_ACCOUNT_ID || "",
     engine: {
-      publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://carlotes.ganxo.net",
+      publicBaseUrl,
       creatorFollowerThreshold: Number.isFinite(followerThreshold) ? followerThreshold : 5000,
     },
   },
+  forward: remyBridge ? (item) => remyBridge.enqueue(item) : null,
 });
 
 const app = express();
 
 // Logging and body parsing
 app.use(morgan("tiny"));
+
+// Remy -> responder, before the global body parser (files are bigger than its limit)
+app.use(
+  "/internal/remy",
+  createRemyRouter({
+    secret: remySecret,
+    api: instagramAPI,
+    store: userDb,
+    responder,
+    media: remyMedia,
+    bridge: remyBridge,
+    accountId: process.env.INSTAGRAM_ACCOUNT_ID || "",
+    logger,
+  })
+);
+app.use("/internal-media", createMediaRouter({ secret: remySecret, media: remyMedia }));
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -110,7 +147,7 @@ app.post("/webhook", (req, res) => {
   for (const entry of entries) {
     const messagingEvents = Array.isArray(entry.messaging) ? entry.messaging : [];
     for (const event of messagingEvents) {
-      responder.handleWebhookEvent(event).catch((error) => {
+      responder.handleWebhookEvent(event, { account: entry.id }).catch((error) => {
         logger.error("Error processing webhook", error);
       });
     }
@@ -150,4 +187,12 @@ app.listen(port, async () => {
   
   // Start token refresh scheduler
   startTokenRefreshScheduler();
+
+  if (remyBridge) {
+    remyBridge.start();
+    logger.log(`Remy bridge: forwarding Instagram events to ${remyForwardUrl}`);
+  } else {
+    logger.log(`Remy bridge: forwarding off (${remySecret ? "REMY_FORWARD_URL" : "REMY_BRIDGE_SECRET"} not set)`);
+  }
+  if (remyMedia) setInterval(() => remyMedia.sweep().catch(() => {}), 10 * 60 * 1000).unref();
 });
