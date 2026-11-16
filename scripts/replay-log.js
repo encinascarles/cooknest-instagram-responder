@@ -4,8 +4,13 @@
 // Sends nothing: no Instagram, no Telegram, no network at all.
 //
 // Usage: node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db]
+//                                  [--forward] [--decisions decisions.jsonl]
 //   --out       default: REPLAY.md in the parent folder of the log's folder
 //   --users-db  default: users.db next to the log (read-only, only for names)
+//   --forward   also hand every event to Remy (README "Remy bridge") through the
+//               real outbox, to a fake in-memory Remy. Same as REPLAY_FORWARD=1.
+//   --decisions write every decision as one JSON line, to diff runs with and
+//               without --forward
 
 const fs = require("fs");
 const path = require("path");
@@ -16,6 +21,8 @@ const { MemoryStore } = require("../src/memory-store");
 const { initLanguageDetector, detectLanguage } = require("../src/language");
 const { SILENCE_REASONS } = require("../src/engine");
 const { classifyMessage } = require("../src/detect");
+const { RemyBridge } = require("../src/remy-bridge");
+const { verify } = require("../src/remy-signature");
 
 const BOT_ID = "replay-bot";
 const HOUR = 60 * 60 * 1000;
@@ -34,14 +41,17 @@ const CONVERSATION_CASES = [
 const OLD_REEL_REPLY_RE = /por aquí|Recuerda|Aviso|primera vez|otro reel/i;
 
 function parseArgs(argv) {
-  const args = { log: null, out: null, usersDb: null };
+  const forwardEnv = process.env.REPLAY_FORWARD === "1" || process.env.REPLAY_FORWARD === "true";
+  const args = { log: null, out: null, usersDb: null, forward: forwardEnv, decisions: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--out") args.out = argv[++i];
     else if (argv[i] === "--users-db") args.usersDb = argv[++i];
+    else if (argv[i] === "--forward") args.forward = true;
+    else if (argv[i] === "--decisions") args.decisions = argv[++i];
     else if (!args.log) args.log = argv[i];
   }
   if (!args.log) {
-    console.error("Usage: node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db]");
+    console.error("Usage: node scripts/replay-log.js <bot.log> [--out REPLAY.md] [--users-db users.db] [--forward] [--decisions decisions.jsonl]");
     process.exit(1);
   }
   const logDir = path.dirname(path.resolve(args.log));
@@ -82,10 +92,33 @@ const short = (text, n = 50) => {
   return (chars.length > n ? chars.slice(0, n).join("") + "…" : chars.join("")).replace(/\|/g, "/");
 };
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const events = parseBotLog(fs.readFileSync(args.log, "utf8"));
-  const names = await loadNames(args.usersDb);
+const REPLAY_SECRET = "replay-secret";
+
+// A fake Remy that checks every signature and keeps what it gets, in memory
+function fakeRemy(time) {
+  const sink = { posts: 0, unsigned: 0, events: [] };
+  sink.post = async (_url, body, headers) => {
+    const check = verify({ secret: REPLAY_SECRET, timestamp: headers["X-Bridge-Timestamp"], signature: headers["X-Bridge-Signature"], rawBody: body, nowMs: time.now() });
+    sink.posts += 1;
+    if (!check.ok) sink.unsigned += 1;
+    sink.events.push(...JSON.parse(body).events);
+    return { status: 200 };
+  };
+  return sink;
+}
+
+// One decision as a line to compare runs (everything the bot decided and did)
+function decisionLine(d) {
+  const { type, kind, reason, lang, variant, notify, messages, update } = d.action;
+  return JSON.stringify({ at: new Date(d.at).toISOString(), userId: d.userId, stateMode: d.stateMode, event: d.event, action: { type, kind, reason, lang, variant, notify, messages, update }, sent: d.sent });
+}
+
+/**
+ * Feeds the parsed log through the Responder with virtual time and fakes.
+ * @param {Array} events parseBotLog() output
+ * @param {{names?: Map, forward?: boolean}} [options] forward: through the Remy outbox to a fake Remy
+ */
+async function replayEvents(events, { names = new Map(), forward = false } = {}) {
   await initLanguageDetector();
 
   const time = new VirtualTime(events[0].at);
@@ -94,6 +127,21 @@ async function main() {
   const sends = [];
   const notifications = [];
   let mid = 0;
+
+  const remy = forward ? fakeRemy(time) : null;
+  const bridge = forward
+    ? new RemyBridge({
+        store,
+        url: `https://remy.replay/api/public/instagram/${BOT_ID}`,
+        secret: REPLAY_SECRET,
+        account: BOT_ID,
+        post: remy.post,
+        clock: time,
+        scheduler: time,
+        logger: { log() {}, error(message, error) { console.error(message, error); } },
+      })
+    : null;
+  if (bridge) bridge.start();
 
   const responder = new Responder({
     store,
@@ -122,6 +170,7 @@ async function main() {
     detectLanguage,
     config: { replyMode: "live", botAccountId: BOT_ID, engine: { publicBaseUrl: "https://carlotes.ganxo.net" } },
     onDecision: (info) => decisions.push(info),
+    forward: bridge ? (item) => bridge.enqueue(item) : null,
   });
 
   // Feed the log in time order
@@ -139,6 +188,20 @@ async function main() {
     // "automatic" lines are the old bot's own replies: the new engine does not see them
   }
   await time.runAll();
+  if (bridge) {
+    await bridge.settled();
+    await bridge.flush();
+    await time.runAll();
+  }
+  const outboxLeft = bridge ? (await store.outboxStats()).queued : 0;
+  return { decisions, sends, notifications, inbound, remy, outboxLeft };
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const events = parseBotLog(fs.readFileSync(args.log, "utf8"));
+  const names = await loadNames(args.usersDb);
+  const { decisions, sends, notifications, inbound, remy, outboxLeft } = await replayEvents(events, { names, forward: args.forward });
 
   // ---- Numbers ----
   const oldAuto = events.filter((e) => e.type === "automatic");
@@ -325,10 +388,32 @@ async function main() {
   console.log(`Recipe decisions by rule: ${JSON.stringify(Object.fromEntries(reasonGroups))}`);
   console.log(`Reels by rule: ${JSON.stringify(Object.fromEntries(reasonReels))}, no longer recipes: ${notRecipeOldReplied.length}`);
   console.log(`Sends to the fake sender: ${sends.length}; Telegram (fake): ${JSON.stringify(Object.fromEntries(notifyCounts))}`);
+  if (remy) {
+    const byOrigin = new Map();
+    const byDecision = new Map();
+    for (const e of remy.events) {
+      inc(byOrigin, e.origin);
+      if (e.bot) inc(byDecision, `${e.bot.classified}/${e.bot.decision}`);
+    }
+    const ids = new Set(remy.events.map((e) => e.id));
+    console.log(
+      `Forwarded to the fake Remy: ${remy.events.length} events (${ids.size} distinct ids) in ${remy.posts} signed POSTs ` +
+        `(${remy.unsigned} with a bad signature), outbox left: ${outboxLeft}; by origin ${JSON.stringify(Object.fromEntries(byOrigin))}; ` +
+        `inbound by decision ${JSON.stringify(Object.fromEntries(byDecision))}`
+    );
+  }
+  if (args.decisions) {
+    fs.writeFileSync(args.decisions, decisions.map(decisionLine).join("\n") + "\n");
+    console.log(`${decisions.length} decisions written to ${args.decisions}`);
+  }
   console.log(`Report written to ${args.out}`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = { replayEvents, decisionLine, toWebhookMessage };
