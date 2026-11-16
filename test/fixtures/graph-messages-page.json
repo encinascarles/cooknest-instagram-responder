@@ -1,0 +1,47 @@
+{
+  "data": [
+    {
+      "id": "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAwMDAwMDAwMDAwOjAwMQZDZD",
+      "message": "Prova: una línia de text",
+      "created_time": "2026-11-16T09:44:55+0000",
+      "from": { "username": "cooknest.app", "id": "17841473716984633" },
+      "to": { "data": [{ "username": "someone.test", "id": "900000000000001" }] },
+      "is_unsupported": false
+    },
+    {
+      "id": "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAwMDAwMDAwMDAwOjAwMgZDZD",
+      "message": "",
+      "created_time": "2026-10-28T15:21:22+0000",
+      "from": { "username": "cooknest.app", "id": "17841473716984633" },
+      "to": { "data": [{ "username": "someone.test", "id": "900000000000001" }] },
+      "attachments": {
+        "data": [{ "video_data": { "width": 720, "height": 1440, "url": "https://lookaside.fbsbx.test/v.mp4", "preview_url": "https://lookaside.fbsbx.test/v.jpg" } }],
+        "paging": { "cursors": { "before": "MAZDZD", "after": "MAZDZD" } }
+      },
+      "is_unsupported": false
+    },
+    {
+      "id": "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAwMDAwMDAwMDAwOjAwMwZDZD",
+      "message": "",
+      "created_time": "2026-10-28T15:21:10+0000",
+      "from": { "username": "someone.test", "id": "900000000000001" },
+      "to": { "data": [{ "username": "cooknest.app", "id": "17841473716984633" }] },
+      "shares": {
+        "data": [{ "link": "https://www.instagram.com/reel/TESTREEL01/" }],
+        "paging": {
+          "cursors": { "before": "MAZDZD", "after": "MAZDZD" },
+          "next": "https://graph.instagram.com/v23.0/aWdfZAG1fake/shares?access_token=SECRET-TOKEN&limit=25&after=MAZDZD"
+        }
+      },
+      "reactions": {
+        "data": [{ "users": [{ "username": "cooknest.app", "id": "17841473716984633" }], "emoji": "❤" }],
+        "paging": { "cursors": { "before": "MAZDZD", "after": "MAZDZD" } }
+      },
+      "is_unsupported": false
+    }
+  ],
+  "paging": {
+    "cursors": { "after": "QVFIUnextcursor" },
+    "next": "https://graph.instagram.com/v23.0/aWdfZAG06fake/messages?access_token=SECRET-TOKEN&fields=id&limit=50&after=QVFIUnextcursor"
+  }
+}
