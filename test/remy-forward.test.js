@@ -48,6 +48,12 @@ test("a reel answered at level 1, its echoes (bot), a human echo, a quick reply"
   ]);
   // The quick reply came after a human message: the bot stays out, as before
   assert.equal(h.sent.length, 2);
+  // Echoes carry the cached profile, or null when there is none (never a half-built object)
+  assert.deepEqual(events.slice(1, 4).map((e) => e.profile), [null, null, null]);
+  await h.store.saveProfile("u1", { name: "Ana", username: "ana" }, h.time.now());
+  await h.echo("u1", "mid.typed.again", "¿Te sale?");
+  const last = (await h.forwarded()).at(-1);
+  assert.deepEqual([last.id, last.profile.igsid, last.profile.username], ["mid.typed.again", "u1", "ana"]);
 });
 
 test("reel burst: every reel carries its decision; grouped reels share the group's one decision", async () => {

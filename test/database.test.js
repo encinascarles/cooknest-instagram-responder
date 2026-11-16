@@ -130,3 +130,16 @@ test("Remy bridge tables: sqlite and memory store behave the same", async (t) =>
   assert.equal(r.expired, null);
   assert.equal(r.pic, "https://cdn.test/ana.jpg");
 });
+
+test("a users row with no profile in it is not a cached profile for Remy", async (t) => {
+  const { Responder } = require("../src/responder");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "igr-db-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const store = new UserDatabase(path.join(dir, "users.db"));
+  await store.recordEcho("900"); // creates the row, nothing about the person
+  const responder = new Responder({ store, profiles: {}, sender: {}, notifier: {}, logger: { log() {}, error() {} } });
+  assert.equal(await responder.cachedProfile("900"), null);
+  await store.saveProfile("900", { name: "Ana", username: "ana" }, Date.now());
+  assert.equal((await responder.cachedProfile("900")).username, "ana");
+  await store.close();
+});

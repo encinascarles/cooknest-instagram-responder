@@ -125,6 +125,8 @@ class RemyBridge {
   }
 
   async add({ account, event, origin, bot = null, profile = null }) {
+    // A profile still being looked up is waited for here, never stored as {}
+    if (profile && typeof profile.then === "function") profile = await Promise.resolve(profile).catch(() => null);
     const id = eventId(event);
     const payload = JSON.stringify({ id, event, origin, bot: bot || null, profile: profile || null });
     await this.store.outboxAdd({ eventId: id, account: this.account || account || "", payload, createdAt: this.clock.now() });

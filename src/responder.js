@@ -117,7 +117,7 @@ class Responder {
       }
       await this.store.recordEcho(userId);
     } finally {
-      if (event) this.emit({ account, event, origin, bot: null, profile: this.cachedProfile(userId) });
+      if (event) this.emit(this.cachedProfile(userId).then((profile) => ({ account, event, origin, bot: null, profile })));
     }
   }
 
@@ -263,6 +263,11 @@ class Responder {
     return sent;
   }
 
+  // A message a human sent from Remy: the same update as an echo typed on the phone
+  async recordHumanMessage(userId, at = this.clock.now()) {
+    await this.store.applyUpdate(userId, this.stateModeFor(userId), { lastHumanAt: at });
+  }
+
   async waitInflight(userId) {
     const pending = this.inflight.get(userId);
     if (pending && pending.size > 0) await Promise.allSettled([...pending]);
@@ -351,12 +356,17 @@ class Responder {
     }
   }
 
-  // The cached profile in Remy's shape, or null; never rejects
+  // The cached profile in Remy's shape, or null (also for a row with nothing in it); never rejects
   cachedProfile(userId) {
     if (!userId || typeof this.store.getCachedProfile !== "function") return Promise.resolve(null);
     return Promise.resolve()
       .then(() => this.store.getCachedProfile(userId))
-      .then((cached) => toRemyProfile(userId, cached && cached.profile))
+      .then((cached) => {
+        const profile = cached && cached.profile;
+        if (!profile) return null;
+        const known = typeof cached.checkedAt === "number" || profile.username || profile.name;
+        return known ? toRemyProfile(userId, profile) : null;
+      })
       .catch(() => null);
   }
 
