@@ -2,6 +2,7 @@ const { Responder } = require("../src/responder");
 const { MemoryStore } = require("../src/memory-store");
 const { VirtualTime } = require("../scripts/lib/virtual-time");
 const { initLanguageDetector, detectLanguage } = require("../src/language");
+const { RemyBridge } = require("../src/remy-bridge");
 
 const BOT_ID = "17841400000000000";
 const START = Date.parse("2026-01-01T10:00:00Z");
@@ -27,7 +28,7 @@ const silentLogger = {
  * A responder wired to fakes: virtual time, in-memory store, recorded sends and
  * Telegram notifications. Nothing leaves the process.
  */
-async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}, failingProfiles = [], engine = {}, sendDelay = null } = {}) {
+async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}, failingProfiles = [], engine = {}, sendDelay = null, bridge = false, forward = null, debounceMs } = {}) {
   await initLanguageDetector();
   const time = new VirtualTime(START);
   const store = new MemoryStore();
@@ -37,6 +38,24 @@ async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}
   const logger = Object.create(silentLogger);
   logger.lines = [];
   let mid = 0;
+
+  // bridge: true wires the real Remy outbox to a fake Remy that keeps what it gets
+  const remy = [];
+  const remyBridge = bridge
+    ? new RemyBridge({
+        store,
+        url: "https://remy.test/api/public/instagram/" + BOT_ID,
+        secret: "test-secret",
+        account: BOT_ID,
+        clock: time,
+        scheduler: time,
+        post: async (_url, body) => {
+          remy.push(...JSON.parse(body).events);
+          return { status: 200 };
+        },
+        logger: { log() {}, error() {} },
+      })
+    : null;
 
   const responder = new Responder({
     store,
@@ -65,8 +84,9 @@ async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}
     clock: time,
     scheduler: time,
     detectLanguage,
-    config: { replyMode, testUserIds, botAccountId: BOT_ID, engine: { publicBaseUrl: "https://example.test", ...engine } },
+    config: { replyMode, testUserIds, botAccountId: BOT_ID, debounceMs, engine: { publicBaseUrl: "https://example.test", ...engine } },
     onDecision: (info) => decisions.push(info),
+    forward: forward || (remyBridge ? (item) => remyBridge.enqueue(item) : null),
   });
 
   let inboundMid = 0;
@@ -85,6 +105,13 @@ async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}
     decisions,
     logger,
     responder,
+    remyBridge,
+    // Everything the fake Remy received so far, in order
+    async forwarded() {
+      await remyBridge.settled();
+      await remyBridge.flush();
+      return remy;
+    },
     async at(isoOrMs) {
       await time.advanceTo(typeof isoOrMs === "number" ? isoOrMs : Date.parse(isoOrMs));
     },
@@ -102,6 +129,10 @@ async function makeHarness({ replyMode = "live", testUserIds = [], profiles = {}
     },
     quickReply(userId, payload, title = "") {
       return responder.handleWebhookEvent(event(userId, { text: title, quick_reply: { payload } }));
+    },
+    // Any raw entry.messaging[] event
+    raw(rawEvent) {
+      return responder.handleWebhookEvent({ timestamp: time.now(), ...rawEvent }, { account: BOT_ID });
     },
     // A message sent from our account (Instagram echo)
     echo(userId, echoMid, text = "Hola") {
