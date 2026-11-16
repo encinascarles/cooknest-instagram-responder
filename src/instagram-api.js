@@ -172,7 +172,9 @@ class InstagramAPI {
     const response = await this.http.get(url, { params, timeout: 20000 });
     const body = response.data || {};
     const data = (Array.isArray(body.data) ? body.data : []).map(withoutPaging);
-    return { data, next: nextCursor(body.paging) };
+    // Graph keeps giving a `next` cursor on empty pages past a conversation's oldest readable message:
+    // following it only burns the app's rate limit (16-nov-2026: 40 empty pages per conversation hit code 4).
+    return { data, next: data.length ? nextCursor(body.paging) : null };
   }
 
   // {igUserId, username} of the business account, cached 1 h

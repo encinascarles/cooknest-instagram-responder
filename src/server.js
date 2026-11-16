@@ -190,7 +190,7 @@ app.listen(port, async () => {
 
   if (remyBridge) {
     remyBridge.start();
-    logger.log(`Remy bridge: forwarding Instagram events to ${remyForwardUrl}`);
+    logger.log(`Remy bridge: forwarding Instagram events to ${new URL(remyForwardUrl).origin} (token path not logged)`);
   } else {
     logger.log(`Remy bridge: forwarding off (${remySecret ? "REMY_FORWARD_URL" : "REMY_BRIDGE_SECRET"} not set)`);
   }

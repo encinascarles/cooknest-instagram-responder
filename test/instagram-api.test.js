@@ -135,6 +135,13 @@ test("messages: Graph messages as they come, minus nested paging (it carries the
   assert.ok(!JSON.stringify(page).includes("SECRET-TOKEN"));
 });
 
+test("messages: an empty page ends paging even when Graph gives a next cursor", async () => {
+  const http = fakeHttp([{ method: "get", match: /\/aWdfZAG06conv1\/messages$/, reply: () => ({ data: { data: [], paging: { cursors: { after: "X" }, next: "https://graph.instagram.com/v20.0/x?access_token=SECRET-TOKEN&after=X" } } }) }]);
+  const { api } = makeApi(http);
+  const page = await api.listMessages("aWdfZAG06conv1", "W");
+  assert.deepEqual(page, { data: [], next: null });
+});
+
 test("account and token info for health", async () => {
   const http = fakeHttp([{ method: "get", match: /\/me$/, reply: () => ({ data: { user_id: "17841473716984633", username: "cooknest.app" } }) }]);
   const { api } = makeApi(http);
