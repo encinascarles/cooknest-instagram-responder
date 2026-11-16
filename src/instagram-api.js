@@ -34,13 +34,15 @@ class InstagramAPI {
    * @param {object} [deps.notifier] Telegram
    * @param {() => string} [deps.accountId] business IG user id
    * @param {() => number} [deps.now]
+   * @param {object} [deps.logger]
    */
-  constructor({ http, tokens, notifier, accountId, now } = {}) {
+  constructor({ http, tokens, notifier, accountId, now, logger: log } = {}) {
     this.http = http || axios;
     this.tokens = tokens || (() => userDb);
     this.notifier = notifier || telegramNotifier;
     this.accountId = accountId || (() => process.env.INSTAGRAM_ACCOUNT_ID || "");
     this.now = now || (() => Date.now());
+    this.logger = log || logger;
     this.account = null; // {value, at}
   }
 
@@ -94,7 +96,7 @@ class InstagramAPI {
     try {
       cached = await store.getCachedProfile(userId);
     } catch (error) {
-      logger.error(`Failed to read cached profile for ${userId}`, error);
+      this.logger.error(`Failed to read cached profile for ${userId}`, error);
     }
     if (cached && typeof cached.checkedAt === "number" && now - cached.checkedAt < PROFILE_CACHE_MS) {
       return { status: "ok", profile: cached.profile };
@@ -107,7 +109,7 @@ class InstagramAPI {
     } catch (error) {
       const errorDetail = error?.response?.data?.error?.message || describeError(error);
       const errorCode = error?.response?.data?.error?.code;
-      logger.error(`Failed to fetch profile for user ${userId}`, error);
+      this.logger.error(`Failed to fetch profile for user ${userId}`, error);
 
       // Check if it's a critical token error
       if (errorCode === 190 || errorDetail?.toLowerCase().includes("oauth")) {

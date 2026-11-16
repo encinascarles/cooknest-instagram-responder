@@ -33,6 +33,7 @@ function makeApi(http, { token = { access_token: "TOKEN", expires_at: "2027-01-1
     notifier: { notifyTokenExpired: async () => notified.push("expired"), notifyError: async () => notified.push("error") },
     accountId: () => "17841473716984633",
     now: () => NOW,
+    logger: { log() {}, error() {} },
   });
   return { api, notified };
 }

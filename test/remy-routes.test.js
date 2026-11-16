@@ -67,6 +67,7 @@ async function makeServer(t, { secret = SECRET, token = { access_token: TOKEN, e
     notifier: { notifyTokenExpired: async () => {}, notifyError: async () => {} },
     accountId: () => BOT_ID,
     now: () => h.time.now(),
+    logger: { log() {}, error() {} },
   });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "igr-media-"));
   const media = new MediaStore({ dir, publicBaseUrl: "https://bot.test/", clock: h.time, scheduler: h.time });
